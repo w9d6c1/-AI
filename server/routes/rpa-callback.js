@@ -11,9 +11,10 @@ const { runAlertChecks } = require('../alert');
 const { nowLocal } = require('../util');
 const collectionState = require('../collection-state');
 const { asyncH } = require('../middleware');
+const { secret } = require('../secrets');
 
 const router = express.Router();
-const callbackToken = process.env.RPA_CALLBACK_TOKEN || '';
+const callbackToken = secret('RPA_CALLBACK_TOKEN');
 if (!callbackToken) console.warn('[security] 未配置 RPA_CALLBACK_TOKEN，所有 RPA 回调将被拒绝');
 
 function authCallback(req, res, next) {

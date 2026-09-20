@@ -146,4 +146,32 @@ router.post('/ai/providers/reload', asyncH(async (req, res) => {
   res.json({ providers: registry.describe() });
 }));
 
+// ========== 全局审计查询（跨租户）==========
+router.get('/audit-logs', asyncH(async (req, res) => {
+  const limit = Math.min(500, Number(req.query.limit) || 100);
+  const params = [];
+  const where = [];
+  if (req.query.tenant_id) { where.push('tenant_id=?'); params.push(Number(req.query.tenant_id)); }
+  if (req.query.user_id) { where.push('user_id=?'); params.push(Number(req.query.user_id)); }
+  if (req.query.action) { where.push('action=?'); params.push(req.query.action); }
+  if (req.query.date_start) { where.push('created_at >= ?'); params.push(req.query.date_start); }
+  if (req.query.date_end) { where.push('created_at <= ?'); params.push(req.query.date_end + ' 23:59:59'); }
+  const clause = where.length ? ' WHERE ' + where.join(' AND ') : '';
+  const logs = await repos.adapter.all(`SELECT * FROM audit_logs${clause} ORDER BY id DESC LIMIT ?`, [...params, limit]);
+  res.json({ logs, limit });
+}));
+
+// ========== 数据保留策略 ==========
+router.get('/retention/policy', (req, res) => {
+  const { POLICIES, policyDays } = require('../retention');
+  res.json({ policies: POLICIES.map(p => ({ table: p.table, column: p.column, days: policyDays(p), env: p.env })) });
+});
+
+router.post('/retention/run', asyncH(async (req, res) => {
+  const { runRetention } = require('../retention');
+  const summary = await runRetention();
+  await audit(1, req.user.id, 'retention_run', 'retention', null, { tenants: Object.keys(summary).length });
+  res.json({ summary });
+}));
+
 module.exports = router;

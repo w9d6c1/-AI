@@ -9,7 +9,8 @@ const migrations = [
   require('./0005_stage2_integrations'),
   require('./0006_stage3_data_model'),
   require('./0007_stage4_ai'),
-  require('./0008_stage5_execution_closure')
+  require('./0008_stage5_execution_closure'),
+  require('./0009_stage7_security')
 ];
 
 async function runMigrations(db) {

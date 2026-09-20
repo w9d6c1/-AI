@@ -124,12 +124,13 @@ async function sendMail(opts) {
 }
 
 function configFromEnv(env = process.env) {
+  const { secret } = require('../../secrets');
   return {
     host: env.SMTP_HOST || '',
     port: Number(env.SMTP_PORT || 587),
     secure: env.SMTP_SECURE === 'true',
     user: env.SMTP_USER || '',
-    pass: env.SMTP_PASS || '',
+    pass: secret('SMTP_PASS') || '',
     from: env.SMTP_FROM || env.SMTP_USER || '',
     fromName: env.SMTP_FROM_NAME || '电商 AI 平台',
     helo: env.SMTP_HELO || 'localhost'

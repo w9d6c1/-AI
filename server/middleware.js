@@ -3,8 +3,9 @@ const jwt = require('jsonwebtoken');
 const { repos } = require('./repositories');
 const { runWithTenant, runAsPlatform } = require('./repositories/tenant-context');
 const { getClient, getSessionVersionCached } = require('./redis');
+const { secret } = require('./secrets');
 
-const JWT_SECRET = process.env.JWT_SECRET || '';
+const JWT_SECRET = secret('JWT_SECRET');
 const JWT_EXPIRES = process.env.JWT_EXPIRES || '7d';
 
 // 生产安全：JWT_SECRET 必须显式配置且足够强，缺失/过短直接启动失败

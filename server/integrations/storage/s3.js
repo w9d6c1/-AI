@@ -7,13 +7,14 @@ let client = null;
 
 function getClient() {
   if (!client) {
+    const { secret } = require('../../secrets');
     client = new S3Client({
       region: process.env.S3_REGION || 'us-east-1',
       endpoint: process.env.S3_ENDPOINT,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: process.env.S3_ACCESS_KEY,
-        secretAccessKey: process.env.S3_SECRET_KEY
+        accessKeyId: secret('S3_ACCESS_KEY'),
+        secretAccessKey: secret('S3_SECRET_KEY')
       }
     });
   }

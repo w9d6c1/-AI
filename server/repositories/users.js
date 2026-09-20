@@ -39,6 +39,15 @@ class UsersRepository {
       : this.db.get(`SELECT ${PUBLIC_FIELDS} FROM users WHERE id=? AND tenant_id=?`, [id, t]);
   }
 
+  // 安全字段（2FA/锁定/密码历史）
+  async findSecurity(id, ctx = {}) {
+    const t = tid(ctx);
+    const cols = 'id, username, password_hash, totp_secret, totp_enabled, totp_recovery, failed_login_count, locked_until, password_changed_at, password_history, must_change_password';
+    return t == null
+      ? this.db.get(`SELECT ${cols} FROM users WHERE id=?`, [id])
+      : this.db.get(`SELECT ${cols} FROM users WHERE id=? AND tenant_id=?`, [id, t]);
+  }
+
   // 全局登录查找（用户名/邮箱全局唯一）：平台级查询
   async findByLogin(login, ctx = {}) {
     return runAsPlatform(() => this.db.get('SELECT * FROM users WHERE username=? OR email=?', [login, login]));
@@ -71,6 +80,14 @@ class UsersRepository {
     if (fields.username !== undefined) { sets.push('username=?'); values.push(fields.username); }
     if (fields.email !== undefined) { sets.push('email=?'); values.push(fields.email); }
     if (fields.role !== undefined) { sets.push('role=?'); values.push(fields.role); }
+    if (fields.totp_secret !== undefined) { sets.push('totp_secret=?'); values.push(fields.totp_secret); }
+    if (fields.totp_enabled !== undefined) { sets.push('totp_enabled=?'); values.push(fields.totp_enabled ? 1 : 0); }
+    if (fields.totp_recovery !== undefined) { sets.push('totp_recovery=?'); values.push(fields.totp_recovery); }
+    if (fields.failed_login_count !== undefined) { sets.push('failed_login_count=?'); values.push(Number(fields.failed_login_count) || 0); }
+    if (fields.locked_until !== undefined) { sets.push('locked_until=?'); values.push(fields.locked_until); }
+    if (fields.password_changed_at !== undefined) { sets.push('password_changed_at=?'); values.push(fields.password_changed_at); }
+    if (fields.password_history !== undefined) { sets.push('password_history=?'); values.push(fields.password_history); }
+    if (fields.must_change_password !== undefined) { sets.push('must_change_password=?'); values.push(fields.must_change_password ? 1 : 0); }
     if (fields.passwordHash !== undefined) {
       sets.push('password_hash=?'); values.push(fields.passwordHash);
       sets.push('session_version=session_version+1');

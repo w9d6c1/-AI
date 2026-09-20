@@ -8,10 +8,11 @@ const { upsertSql } = require('./repositories/sql');
 const { requireTenant } = require('./repositories/tenant-context');
 const { nowLocal } = require('./util');
 const collectionState = require('./collection-state');
+const { secret } = require('./secrets');
 
 const MOCK_MODE = process.env.RPA_MOCK_MODE !== 'false';
 const RPA_API_BASE = process.env.RPA_API_BASE || 'https://openapi.yingdao.com';
-const RPA_APP_SECRET = process.env.RPA_APP_SECRET || '';
+const RPA_APP_SECRET = secret('RPA_APP_SECRET');
 
 // 按任务类型选择影刀应用（B4：计划报表使用独立 app_id）
 const APP_IDS = {

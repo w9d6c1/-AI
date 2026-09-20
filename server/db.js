@@ -55,6 +55,14 @@ CREATE TABLE IF NOT EXISTS users (
   password_hash TEXT NOT NULL,
   team_id INTEGER,
   role TEXT DEFAULT 'member',
+  totp_secret TEXT,
+  totp_enabled INTEGER DEFAULT 0,
+  totp_recovery TEXT,
+  failed_login_count INTEGER DEFAULT 0,
+  locked_until TEXT,
+  password_changed_at TEXT,
+  password_history TEXT,
+  must_change_password INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now','localtime')),
   FOREIGN KEY (team_id) REFERENCES teams(id)
 );
@@ -363,6 +371,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   target_id TEXT,
   detail_json TEXT,
   ip_address TEXT,
+  user_agent TEXT,
   created_at TEXT DEFAULT (datetime('now','localtime'))
 );
 

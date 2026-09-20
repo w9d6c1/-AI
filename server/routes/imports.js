@@ -37,6 +37,9 @@ router.get('/stores/import/template', (req, res) => {
 
 router.post('/stores/import/csv', requireRole('boss', 'admin'), upload.single('file'), asyncH(async (req, res) => {
   if (!req.file) return res.status(400).json({ error: '未收到 CSV 文件' });
+  const { scanBuffer } = require('../security/scan');
+  const scan = await scanBuffer(req.file.buffer, req.file.originalname);
+  if (!scan.ok) return res.status(400).json({ error: '文件未通过安全扫描', detail: scan.reason });
   const type = req.query.type || 'auto';
   const result = await csv.importBuffer({
     buffer: req.file.buffer,

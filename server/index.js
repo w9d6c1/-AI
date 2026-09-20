@@ -140,6 +140,13 @@ app.get('/api/dashboard/stats', authRequired, asyncH(async (req, res) => {
 app.post('/api/upload', authRequired, upload.single('file'), async (req, res, next) => {
   try {
     if (!req.file) return res.status(400).json({ error: '未收到文件' });
+    // 病毒扫描（SCAN_UPLOADS=true 时）
+    const { scanBuffer } = require('./security/scan');
+    const scan = await scanBuffer(fs.readFileSync(req.file.path), req.file.originalname);
+    if (!scan.ok) {
+      try { fs.unlinkSync(req.file.path); } catch (_) { /* ignore */ }
+      return res.status(400).json({ error: '文件未通过安全扫描', detail: scan.reason });
+    }
     const storage = require('./integrations/storage');
     if (!storage.isLocal()) {
       const buf = fs.readFileSync(req.file.path);

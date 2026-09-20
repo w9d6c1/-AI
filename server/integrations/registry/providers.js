@@ -3,10 +3,11 @@
 // 密钥用 apiKeyEnv 引用环境变量名，避免明文写入配置。
 
 function normalize(p, i) {
+  const { secret } = require('../../secrets');
   const caps = Array.isArray(p.caps) && p.caps.length ? p.caps : ['chat'];
   const baseUrl = p.baseUrl || process.env.AI_BASE_URL || '';
-  const apiKey = p.apiKeyEnv ? (process.env[p.apiKeyEnv] || '') : (p.apiKey || '');
-  const imageApiKey = p.imageApiKeyEnv ? (process.env[p.imageApiKeyEnv] || apiKey) : (p.imageApiKey || apiKey);
+  const apiKey = p.apiKeyEnv ? secret(p.apiKeyEnv) : (p.apiKey || '');
+  const imageApiKey = p.imageApiKeyEnv ? (secret(p.imageApiKeyEnv) || apiKey) : (p.imageApiKey || apiKey);
   return {
     id: p.id || ('p' + (i + 1)),
     priority: Number(p.priority) || (i + 1),

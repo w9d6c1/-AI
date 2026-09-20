@@ -43,16 +43,24 @@ function sleep(ms) {
 }
 
 // ========== LLM 调用（重试/故障转移由 ProviderRegistry 负责） ==========
+// 合规：LLM_REDACT_PII=true 时，发送前对 PII 脱敏（第三方出境）
+function _prep(messages) {
+  try {
+    const compliance = require('./compliance');
+    return compliance.redactEnabled() ? compliance.redactMessages(messages) : messages;
+  } catch (_) { return messages; }
+}
+
 async function fetchLLM(messages, opts = {}) {
   if (!aiEnabled()) throw new Error('AI_API_KEY 未配置');
-  const r = await registry.callChat(messages, opts);
+  const r = await registry.callChat(_prep(messages), opts);
   return r.content;
 }
 
 // 返回完整元信息（provider/model/tokens/cost），供用量成本统计
 async function fetchLLMDetailed(messages, opts = {}) {
   if (!aiEnabled()) throw new Error('AI_API_KEY 未配置');
-  return registry.callChat(messages, opts);
+  return registry.callChat(_prep(messages), opts);
 }
 
 // ========== 统计与配置信息 ==========
