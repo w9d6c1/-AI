@@ -43,7 +43,7 @@ async function getDashboardStats({ shopIds = [], range = '30d' } = {}) {
 
   const empty = {
     metrics: { sales: 0, uv: 0, cvr: 0, roi: 0, salesChange: 0, uvChange: 0, cvrChange: 0, roiChange: 0, orders: 0, refunds: 0 },
-    trend: [], channels: [], ad: { weeks: [], spend: [], output: [] }, topProducts: [],
+    trend: [], channels: [], ad: { weeks: [], spend: [], output: [] }, topProducts: [], accounts: [], platforms: [],
     range, date_range: { start, end }, shop_count: 0
   };
   if (!shopIds.length) return empty;
@@ -145,7 +145,40 @@ async function getDashboardStats({ shopIds = [], range = '30d' } = {}) {
     )).map(r => ({ name: r.name, value: Math.round(Number(r.pay) * 100) / 100 }));
   }
 
-  return { metrics, trend, channels, ad, topProducts, range, date_range: { start, end }, shop_count: Number(cur.shop_count) };
+  // 广告账号 / 平台表现（多平台看板：按 account_id 与 platform 聚合）
+  const accountRows = await repos.adapter.all(
+    `SELECT account_id, platform, SUM(cost) cost, SUM(pay_amount) pay, COUNT(DISTINCT campaign_id) campaigns
+     FROM ad_campaigns
+     WHERE tenant_id=? AND shop_id IN (${ph}) AND report_date BETWEEN ? AND ?
+       AND account_id IS NOT NULL AND account_id <> ''
+     GROUP BY account_id, platform ORDER BY cost DESC LIMIT 50`,
+    [t, start, end]
+  );
+  const accounts = accountRows.map(r => ({
+    account_id: r.account_id,
+    platform: r.platform || null,
+    cost: Math.round(Number(r.cost) * 100) / 100,
+    pay: Math.round(Number(r.pay) * 100) / 100,
+    roi: Number(r.cost) > 0 ? Math.round((Number(r.pay) / Number(r.cost)) * 100) / 100 : 0,
+    campaigns: Number(r.campaigns)
+  }));
+
+  const platformRows = await repos.adapter.all(
+    `SELECT platform, SUM(cost) cost, SUM(pay_amount) pay, COUNT(DISTINCT campaign_id) campaigns
+     FROM ad_campaigns
+     WHERE tenant_id=? AND shop_id IN (${ph}) AND report_date BETWEEN ? AND ?
+     GROUP BY platform ORDER BY cost DESC`,
+    [t, start, end]
+  );
+  const platforms = platformRows.map(r => ({
+    platform: r.platform || '未标注',
+    cost: Math.round(Number(r.cost) * 100) / 100,
+    pay: Math.round(Number(r.pay) * 100) / 100,
+    roi: Number(r.cost) > 0 ? Math.round((Number(r.pay) / Number(r.cost)) * 100) / 100 : 0,
+    campaigns: Number(r.campaigns)
+  }));
+
+  return { metrics, trend, channels, ad, topProducts, accounts, platforms, range, date_range: { start, end }, shop_count: Number(cur.shop_count) };
 }
 
 module.exports = { getDashboardStats, RANGE_DAYS };

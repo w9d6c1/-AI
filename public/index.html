@@ -546,6 +546,19 @@ input, textarea, select { font-family:inherit; outline:none; }
             <div class="chart-box" id="chart-top"></div>
           </div>
         </div>
+        <div class="card mt-16">
+          <div class="card-title">广告账号 / 平台表现 <span class="text-sm text-secondary">按花费排序</span></div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">广告账号</th><th style="padding:8px;">平台</th>
+                <th style="padding:8px;">花费</th><th style="padding:8px;">成交金额</th>
+                <th style="padding:8px;">ROI</th><th style="padding:8px;">计划数</th>
+              </tr></thead>
+              <tbody id="dash-accounts-tbody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ===== AI 对话 ===== -->
@@ -2112,6 +2125,7 @@ async function loadDashboard() {
     dashboardData = data;
     renderMetrics(data.metrics);
     renderCharts(data);
+    renderAccountTable(data);
   } catch (e) { showToast(e.message, 'error'); }
 }
 function setDashboardRange(btn, range) {
@@ -2190,6 +2204,37 @@ function renderCharts(d) {
       series: [{ type: 'bar', data: prods.map(p => p.value).reverse(), itemStyle: { color: '#0d9488', borderRadius: [0, 4, 4, 0] }, barWidth: 14 }]
     });
   }
+}
+
+function renderAccountTable(d) {
+  const tb = $('dash-accounts-tbody');
+  if (!tb) return;
+  const money = v => '¥' + Number(v || 0).toLocaleString('zh-CN');
+  const platformLabel = { taobao: '淘宝', jd: '京东', pdd: '拼多多', douyin: '抖音' };
+  const platforms = d.platforms || [];
+  const accounts = d.accounts || [];
+  const rows = [];
+  for (const p of platforms) {
+    rows.push(`<tr style="border-bottom:1px solid var(--border);background:var(--bg);">
+      <td style="padding:8px;font-weight:600;">平台合计</td>
+      <td style="padding:8px;">${esc(platformLabel[p.platform] || p.platform)}</td>
+      <td style="padding:8px;">${money(p.cost)}</td>
+      <td style="padding:8px;">${money(p.pay)}</td>
+      <td style="padding:8px;">${p.roi}</td>
+      <td style="padding:8px;">${p.campaigns}</td>
+    </tr>`);
+  }
+  for (const a of accounts) {
+    rows.push(`<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${esc(a.account_id)}</td>
+      <td style="padding:8px;">${esc(platformLabel[a.platform] || a.platform || '—')}</td>
+      <td style="padding:8px;">${money(a.cost)}</td>
+      <td style="padding:8px;">${money(a.pay)}</td>
+      <td style="padding:8px;">${a.roi}</td>
+      <td style="padding:8px;">${a.campaigns}</td>
+    </tr>`);
+  }
+  tb.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted);">暂无广告账号数据，可通过「数据导入」上传广告计划 CSV</td></tr>';
 }
 
 // ---------- AI 对话 ----------

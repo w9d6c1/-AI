@@ -60,7 +60,7 @@ before(async () => {
     const yest = dateLocalOffset(-1);
     await defaultAdapter.run('INSERT INTO daily_reports (tenant_id,shop_id,report_date,visitors,payed_buyer_count,pay_amount) VALUES (?,?,?,?,?,?)', [1, shopId, today, 100, 10, 1000]);
     await defaultAdapter.run('INSERT INTO daily_reports (tenant_id,shop_id,report_date,visitors,payed_buyer_count,pay_amount) VALUES (?,?,?,?,?,?)', [1, shopId, yest, 200, 20, 2000]);
-    await defaultAdapter.run("INSERT INTO ad_campaigns (tenant_id,shop_id,campaign_id,campaign_name,campaign_type,report_date,cost,impressions,clicks,pay_amount,roi,status,platform) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", [1, shopId, 'c1', '计划1', 'standard', today, 100, 1000, 50, 400, 4, 'running', 'taobao']);
+    await defaultAdapter.run("INSERT INTO ad_campaigns (tenant_id,shop_id,campaign_id,campaign_name,campaign_type,report_date,cost,impressions,clicks,pay_amount,roi,status,platform,account_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)", [1, shopId, 'c1', '计划1', 'standard', today, 100, 1000, 50, 400, 4, 'running', 'taobao', 'acct_1']);
     await defaultAdapter.run('INSERT INTO orders_daily (tenant_id,shop_id,report_date,order_count,payed_order_count,pay_amount,refund_order_count,refund_amount) VALUES (?,?,?,?,?,?,?,?)', [1, shopId, today, 40, 30, 1000, 2, 50]);
     await defaultAdapter.run('INSERT INTO refunds_daily (tenant_id,shop_id,report_date,refund_count,refund_amount,refund_rate) VALUES (?,?,?,?,?,?)', [1, shopId, today, 3, 60, 0.02]);
     await defaultAdapter.run('INSERT INTO products (tenant_id,shop_id,product_id,title,price,platform) VALUES (?,?,?,?,?,?)', [1, shopId, 'p1', '商品一', 99, 'taobao']);
@@ -101,6 +101,26 @@ test('P4-1 数据看板真实聚合', async () => {
   assert.ok(d.ad.weeks.length >= 1);
   assert.equal(d.topProducts[0].name, '商品一');
   assert.equal(d.topProducts[0].value, 800);
+});
+
+test('P4-1 看板：按广告账号与平台聚合（多平台看板）', async () => {
+  const d = await json(await req('/dashboard/stats?range=7d'));
+  assert.ok(Array.isArray(d.accounts));
+  const acc = d.accounts.find(a => a.account_id === 'acct_1');
+  assert.ok(acc, '应包含广告账号 acct_1');
+  assert.equal(acc.platform, 'taobao');
+  assert.equal(acc.cost, 100);
+  assert.equal(acc.pay, 400);
+  assert.equal(acc.roi, 4);
+  assert.equal(acc.campaigns, 1);
+
+  assert.ok(Array.isArray(d.platforms));
+  const plat = d.platforms.find(p => p.platform === 'taobao');
+  assert.ok(plat, '应包含平台 taobao');
+  assert.equal(plat.cost, 100);
+  assert.equal(plat.pay, 400);
+  assert.equal(plat.roi, 4);
+  assert.equal(plat.campaigns, 1);
 });
 
 test('P4-3 buildContext 注入订单/退款/商品/趋势', async () => {
