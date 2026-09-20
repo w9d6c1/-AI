@@ -318,6 +318,10 @@ input, textarea, select { font-family:inherit; outline:none; }
         <label class="form-label">密码</label>
         <input class="form-input" type="password" id="login-password" placeholder="请输入密码">
       </div>
+      <div class="form-group" id="login-2fa-wrap" style="display:none;">
+        <label class="form-label">两步验证码</label>
+        <input class="form-input" id="login-totp" placeholder="6 位动态码或恢复码" autocomplete="one-time-code">
+      </div>
       <button class="login-btn" onclick="doLogin()">登 录</button>
       <div class="login-footer">内部系统，账号请联系管理员开通</div>
     </div>
@@ -401,6 +405,18 @@ input, textarea, select { font-family:inherit; outline:none; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         用户管理
       </div>
+      <div class="nav-item" data-route="stores-import" onclick="navigate('stores-import')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        数据导入
+      </div>
+      <div class="nav-item" data-route="stores-data" onclick="navigate('stores-data')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+        数据查询
+      </div>
+      <div class="nav-item" data-route="stores-reconcile" onclick="navigate('stores-reconcile')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        执行对账
+      </div>
       <div class="nav-section">AI 能力</div>
       <div class="nav-item" data-route="chat" onclick="navigate('chat')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
@@ -409,6 +425,10 @@ input, textarea, select { font-family:inherit; outline:none; }
       <div class="nav-item" data-route="agents" onclick="navigate('agents')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4M8 16h.01M16 16h.01"/></svg>
         AI 智能体
+      </div>
+      <div class="nav-item" data-route="agent-runs" onclick="navigate('agent-runs')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+        运行历史
       </div>
       <div class="nav-item" data-route="creation" onclick="navigate('creation')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
@@ -427,6 +447,15 @@ input, textarea, select { font-family:inherit; outline:none; }
       <div class="nav-item" data-route="learning" onclick="navigate('learning')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
         学习中心
+      </div>
+      <div class="nav-section">系统</div>
+      <div class="nav-item" data-route="usage" onclick="navigate('usage')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+        用量统计
+      </div>
+      <div class="nav-item" data-route="security" onclick="navigate('security')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        安全中心
       </div>
     </nav>
     <div class="sidebar-footer">
@@ -463,12 +492,12 @@ input, textarea, select { font-family:inherit; outline:none; }
           <button class="filter-btn" onclick="setDashboardRange(this,'90d')">近90天</button>
           <button class="filter-btn" onclick="setDashboardRange(this,'custom')">自定义</button>
           <div style="flex:1"></div>
-          <select class="form-select" style="width:140px;" onchange="updateDashboard()">
-            <option>全部渠道</option>
-            <option>淘宝天猫</option>
-            <option>京东</option>
-            <option>拼多多</option>
-            <option>抖音电商</option>
+          <select class="form-select" id="dashboard-platform" style="width:140px;" onchange="loadDashboard()">
+            <option value="">全部平台</option>
+            <option value="taobao">淘宝</option>
+            <option value="jd">京东</option>
+            <option value="pdd">拼多多</option>
+            <option value="douyin">抖音</option>
           </select>
         </div>
         <div class="grid grid-4 mb-16">
@@ -1422,6 +1451,169 @@ input, textarea, select { font-family:inherit; outline:none; }
           </div>
         </div>
       </div>
+      <!-- ===== 数据导入 ===== -->
+      <div class="view" id="view-stores-import">
+        <div class="flex-between mb-16">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <select id="import-type" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></select>
+            <button class="btn btn-outline btn-sm" onclick="downloadImportTemplate()">下载模板</button>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="loadImportBatches()">刷新</button>
+        </div>
+        <div class="card">
+          <div class="card-title">上传 CSV</div>
+          <p style="font-size:12px;color:var(--text-muted);margin:8px 0 12px;">选择类型下载模板填写，或直接上传（自动识别表头）。支持：店铺日报 / 广告计划 / 商品 / 商品日报 / 订单日报 / 退款日报。</p>
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <input type="file" id="import-file" accept=".csv" style="font-size:13px;">
+            <button class="btn btn-primary btn-sm" onclick="submitImport()">开始导入</button>
+          </div>
+          <div id="import-result" style="margin-top:12px;font-size:13px;"></div>
+        </div>
+        <div class="card mt-16">
+          <div class="card-title">导入批次</div>
+          <div style="overflow-x:auto;margin-top:12px;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">ID</th><th style="padding:8px;">文件</th><th style="padding:8px;">状态</th>
+                <th style="padding:8px;">总行</th><th style="padding:8px;">成功</th><th style="padding:8px;">失败</th>
+                <th style="padding:8px;">时间</th><th style="padding:8px;">操作</th>
+              </tr></thead>
+              <tbody id="import-batches-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 数据查询 ===== -->
+      <div class="view" id="view-stores-data">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:8px;">
+          <div class="agent-category-tabs" style="margin-bottom:0;" id="data-tabs"></div>
+          <button class="btn btn-outline btn-sm" onclick="loadDataView()">刷新</button>
+        </div>
+        <div class="card">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px;">
+            <select id="data-platform" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;"><option value="">全部平台</option><option value="taobao">淘宝</option><option value="jd">京东</option><option value="pdd">拼多多</option><option value="douyin">抖音</option></select>
+            <select id="data-shop" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;"><option value="">全部店铺</option></select>
+            <input id="data-q" placeholder="商品标题关键词（仅商品）" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <input id="data-start" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <span style="color:var(--text-muted);">至</span>
+            <input id="data-end" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button class="btn btn-primary btn-sm" onclick="loadDataView()">查询</button>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead id="data-thead"></thead>
+              <tbody id="data-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 执行对账 ===== -->
+      <div class="view" id="view-stores-reconcile">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+            <select id="recon-shop" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;"><option value="">全部店铺</option></select>
+            <input id="recon-start" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <span style="color:var(--text-muted);">至</span>
+            <input id="recon-end" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button class="btn btn-primary btn-sm" onclick="loadReconcile()">查询</button>
+            <button class="btn btn-outline btn-sm" onclick="exportReconcile()">导出报表</button>
+          </div>
+        </div>
+        <div class="grid grid-4 mb-16" id="recon-summary"></div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">执行ID</th><th style="padding:8px;">店铺</th><th style="padding:8px;">动作</th>
+                <th style="padding:8px;">计划</th><th style="padding:8px;">执行前</th><th style="padding:8px;">期望</th>
+                <th style="padding:8px;">实际</th><th style="padding:8px;">差异</th><th style="padding:8px;">是否一致</th>
+              </tr></thead>
+              <tbody id="recon-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 智能体运行历史 ===== -->
+      <div class="view" id="view-agent-runs">
+        <div class="flex-between mb-16">
+          <div style="font-size:13px;color:var(--text-muted);">近 50 次智能体执行记录</div>
+          <button class="btn btn-outline btn-sm" onclick="loadAgentRuns()">刷新</button>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">ID</th><th style="padding:8px;">智能体</th><th style="padding:8px;">输入</th>
+                <th style="padding:8px;">来源</th><th style="padding:8px;">耗时</th><th style="padding:8px;">时间</th><th style="padding:8px;">操作</th>
+              </tr></thead>
+              <tbody id="agent-runs-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 用量统计 ===== -->
+      <div class="view" id="view-usage">
+        <div class="flex-between mb-16" style="flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input id="usage-start" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <span style="color:var(--text-muted);">至</span>
+            <input id="usage-end" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+            <button class="btn btn-primary btn-sm" onclick="loadUsage()">查询</button>
+          </div>
+          <button class="btn btn-outline btn-sm" onclick="loadUsage()">刷新</button>
+        </div>
+        <div class="card">
+          <div class="card-title">按 Provider / 能力 / 模型</div>
+          <div style="overflow-x:auto;margin-top:12px;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">Provider</th><th style="padding:8px;">能力</th><th style="padding:8px;">模型</th>
+                <th style="padding:8px;">调用</th><th style="padding:8px;">输入Token</th><th style="padding:8px;">输出Token</th><th style="padding:8px;">成本</th>
+              </tr></thead>
+              <tbody id="usage-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card mt-16">
+          <div class="card-title">按智能体</div>
+          <div style="overflow-x:auto;margin-top:12px;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">智能体</th><th style="padding:8px;">次数</th>
+                <th style="padding:8px;">输入Token</th><th style="padding:8px;">输出Token</th><th style="padding:8px;">成本</th>
+              </tr></thead>
+              <tbody id="usage-agent-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== 安全中心 ===== -->
+      <div class="view" id="view-security">
+        <div class="grid grid-2">
+          <div class="card">
+            <div class="card-title">两步验证（2FA）</div>
+            <div id="security-2fa" style="margin-top:12px;font-size:13px;"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">修改密码</div>
+            <div style="margin-top:12px;">
+              <div style="margin-bottom:8px;"><input id="pwd-current" type="password" placeholder="当前密码" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;"></div>
+              <div style="margin-bottom:8px;"><input id="pwd-new" type="password" placeholder="新密码（≥12位，含大小写/数字/符号 3 类）" style="width:100%;padding:8px;border:1px solid var(--border);border-radius:6px;"></div>
+              <button class="btn btn-primary btn-sm" onclick="changePassword()">修改密码</button>
+            </div>
+          </div>
+        </div>
+        <div class="card mt-16">
+          <div class="card-title">登录与安全状态</div>
+          <div id="security-status" style="margin-top:12px;font-size:13px;color:var(--text-secondary);"></div>
+        </div>
+      </div>
+
       <div id="modal-batch" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
         <div style="background:#fff;border-radius:12px;padding:24px;width:520px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
           <div class="flex-between mb-16">
@@ -1582,7 +1774,12 @@ const API = {
       throw new Error('登录已过期，请重新登录');
     }
     const data = await resp.json().catch(() => ({}));
-    if (!resp.ok) throw new Error(data.error || '请求失败');
+    if (!resp.ok) {
+      const err = new Error(data.error || '请求失败');
+      err.status = resp.status;
+      err.data = data;
+      throw err;
+    }
     return data;
   },
   get: (p) => API.request(p),
@@ -1664,9 +1861,15 @@ const PAGE_TITLES = {
   'stores-batch': '批量操作',
   'stores-reports': '报表导出',
   'stores-audit': '审计日志',
-  'stores-users': '用户管理'
+  'stores-users': '用户管理',
+  'stores-import': '数据导入',
+  'stores-data': '数据查询',
+  'stores-reconcile': '执行对账',
+  'agent-runs': '智能体运行历史',
+  usage: '用量统计',
+  security: '安全中心'
 };
-const ADMIN_ROUTES = new Set(['stores-scheduler', 'stores-alerts', 'stores-batch', 'stores-audit', 'stores-users']);
+const ADMIN_ROUTES = new Set(['stores-scheduler', 'stores-alerts', 'stores-batch', 'stores-audit', 'stores-users', 'stores-import']);
 function isAdminUser() {
   return ['boss', 'admin'].includes(state.currentUser?.role);
 }
@@ -1695,18 +1898,28 @@ function switchLoginTab(tab) {
 async function doLogin() {
   const username = $('login-username').value.trim();
   const password = $('login-password').value;
+  const totp = ($('login-totp') && $('login-totp').value.trim()) || undefined;
   if (!username || !password) { showToast('请输入用户名和密码', 'warn'); return; }
   try {
-    const data = await API.post('/auth/login', { username, password });
+    const data = await API.post('/auth/login', { username, password, totp });
     localStorage.setItem('zy_token', data.token);
     localStorage.setItem('zy_user', JSON.stringify(data.user));
     state.currentUser = data.user;
     applyRoleUI();
     $('user-avatar').textContent = (data.user.username || 'U').charAt(0).toUpperCase();
     $('login-view').classList.remove('active');
+    if ($('login-2fa-wrap')) $('login-2fa-wrap').style.display = 'none';
     showToast('登录成功，欢迎回来！');
     initApp();
-  } catch (e) { showToast(e.message, 'error'); }
+  } catch (e) {
+    if (e.data && e.data.requires_2fa) {
+      if ($('login-2fa-wrap')) $('login-2fa-wrap').style.display = 'block';
+      if ($('login-totp')) { $('login-totp').value = ''; $('login-totp').focus(); }
+      showToast('请输入两步验证码', 'warn');
+      return;
+    }
+    showToast(e.message, 'error');
+  }
 }
 async function doRegister() {
   const username = $('reg-username').value.trim();
@@ -1765,6 +1978,12 @@ function navigate(route) {
   if (route === 'stores-reports') loadReports();
   if (route === 'stores-audit') loadAuditLogs();
   if (route === 'stores-users') loadUsers();
+  if (route === 'stores-import') initImport();
+  if (route === 'stores-data') initDataView();
+  if (route === 'stores-reconcile') initReconcile();
+  if (route === 'agent-runs') loadAgentRuns();
+  if (route === 'usage') initUsage();
+  if (route === 'security') loadSecurity();
 }
 window.addEventListener('hashchange', () => {
   const h = location.hash.replace('#', '');
@@ -1777,7 +1996,8 @@ let dashboardData = null;
 let currentRange = '30d';
 async function loadDashboard() {
   try {
-    const data = await API.get('/dashboard/stats?range=' + currentRange);
+    const platform = ($('dashboard-platform') && $('dashboard-platform').value) || '';
+    const data = await API.get('/dashboard/stats?range=' + currentRange + (platform ? '&platform=' + platform : ''));
     dashboardData = data;
     renderMetrics(data.metrics);
     renderCharts(data);
@@ -4104,11 +4324,360 @@ async function submitPermissions() {
     closeModal('modal-perm');
   } catch (e) { showToast('保存失败: ' + e.message, 'error'); }
 }
+
+// ===================== 阶段 8：新增视图逻辑 =====================
+function emptyState(text, colspan) {
+  return `<tr><td colspan="${colspan}" style="padding:28px;text-align:center;color:var(--text-muted);">
+    <div style="font-size:22px;margin-bottom:6px;">📭</div>${esc(text)}</td></tr>`;
+}
+function openGenericModal(title, html) {
+  $('generic-title').textContent = title;
+  $('generic-body').innerHTML = html;
+  openModal('modal-generic');
+}
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function daysAgoStr(n) { const d = new Date(Date.now() - n * 86400000); return d.toISOString().slice(0, 10); }
+function fmtNum(v) { return v === null || v === undefined ? '—' : Number(v).toLocaleString('zh-CN'); }
+async function fillShopSelect(selectId) {
+  const sel = $(selectId);
+  if (!sel) return;
+  try {
+    const data = await API.get('/shops');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">全部店铺</option>' + (data.shops || []).map(s => `<option value="${s.id}">${esc(s.shop_name)}</option>`).join('');
+    sel.value = cur;
+  } catch (_) { /* ignore */ }
+}
+async function authedFetch(path, opts = {}) {
+  const token = localStorage.getItem('zy_token');
+  const headers = Object.assign({}, opts.headers || {});
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  return fetch('/api' + path, { ...opts, headers });
+}
+
+// ---------- 数据导入 ----------
+let importTypes = [];
+async function initImport() {
+  if (!importTypes.length) {
+    try { importTypes = (await API.get('/stores/import/types')).types || []; } catch (_) { importTypes = []; }
+    const sel = $('import-type');
+    if (sel) sel.innerHTML = '<option value="auto">自动识别</option>' + importTypes.map(t => `<option value="${t.value}">${esc(t.label)}</option>`).join('');
+  }
+  loadImportBatches();
+}
+async function downloadImportTemplate() {
+  const type = ($('import-type') && $('import-type').value) || 'daily_report';
+  if (type === 'auto') { showToast('请选择具体类型以下载模板', 'warn'); return; }
+  try {
+    const resp = await authedFetch('/stores/import/template?type=' + encodeURIComponent(type));
+    if (!resp.ok) throw new Error('下载失败');
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `import_${type}_template.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+async function submitImport() {
+  const fileEl = $('import-file');
+  if (!fileEl || !fileEl.files.length) { showToast('请选择 CSV 文件', 'warn'); return; }
+  const type = ($('import-type') && $('import-type').value) || 'auto';
+  const fd = new FormData();
+  fd.append('file', fileEl.files[0]);
+  const box = $('import-result');
+  box.innerHTML = '导入中…';
+  try {
+    const resp = await authedFetch('/stores/import/csv?type=' + encodeURIComponent(type), { method: 'POST', body: fd });
+    const body = await resp.json();
+    if (!resp.ok && !body.report) throw new Error(body.error || '导入失败');
+    const r = body.report || {};
+    const warn = (r.warnings || []).slice(0, 5).map(w => `<li>第${w.row}行 ${esc(w.field)}：${esc(w.message)}</li>`).join('');
+    const errs = (r.errors || []).slice(0, 5).map(w => `<li>第${w.row}行 ${esc(w.field)}：${esc(w.message)}</li>`).join('');
+    box.innerHTML = `<div style="padding:10px;border-radius:8px;background:var(--bg);">
+      <div>状态：<b>${esc(r.status)}</b> ｜ 总行 ${r.total} ｜ 新增 ${r.inserted} ｜ 更新 ${r.updated} ｜ 失败 ${r.failed}</div>
+      ${warn ? `<div style="margin-top:6px;color:#d97706;">质量告警：<ul style="margin:4px 0 0 18px;">${warn}</ul></div>` : ''}
+      ${errs ? `<div style="margin-top:6px;color:#dc2626;">错误：<ul style="margin:4px 0 0 18px;">${errs}</ul></div>` : ''}
+    </div>`;
+    showToast('导入完成', 'success');
+    fileEl.value = '';
+    loadImportBatches();
+  } catch (e) { box.innerHTML = `<span style="color:#dc2626;">${esc(e.message)}</span>`; }
+}
+async function loadImportBatches() {
+  const tb = $('import-batches-tbody');
+  if (!tb) return;
+  try {
+    const data = await API.get('/stores/import/batches');
+    const rows = data.batches || [];
+    if (!rows.length) { tb.innerHTML = emptyState('暂无导入批次，先上传一个 CSV 试试', 8); return; }
+    const statusMap = { success: '<span style="color:#10b981;">成功</span>', partial: '<span style="color:#d97706;">部分成功</span>', failed: '<span style="color:#dc2626;">失败</span>', running: '处理中' };
+    tb.innerHTML = rows.map(b => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${b.id}</td>
+      <td style="padding:8px;">${esc(b.file_name || '—')}</td>
+      <td style="padding:8px;">${statusMap[b.status] || esc(b.status)}</td>
+      <td style="padding:8px;">${b.total_rows}</td>
+      <td style="padding:8px;">${b.success_rows}</td>
+      <td style="padding:8px;">${b.failed_rows}</td>
+      <td style="padding:8px;">${esc(b.created_at || '')}</td>
+      <td style="padding:8px;"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="viewImportBatch(${b.id})">详情</button></td>
+    </tr>`).join('');
+  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 8); }
+}
+async function viewImportBatch(id) {
+  try {
+    const { batch } = await API.get('/stores/import/batches/' + id);
+    const summary = batch.summary_json || {};
+    const errs = (batch.errors_json || []).map(e => `<li>第${e.row}行 ${esc(e.field)}：${esc(e.message)}</li>`).join('');
+    const warns = (batch.warnings_json || []).map(e => `<li>第${e.row}行 ${esc(e.field)}：${esc(e.message)}</li>`).join('');
+    openGenericModal('导入批次 #' + id, `
+      <div>类型：${esc(summary.type || '—')} ｜ 新增 ${summary.inserted || 0} ｜ 更新 ${summary.updated || 0} ｜ 告警 ${summary.warnings || 0}</div>
+      ${warns ? `<h4 style="margin:12px 0 4px;">质量告警</h4><ul style="margin:0 0 0 18px;">${warns}</ul>` : ''}
+      ${errs ? `<h4 style="margin:12px 0 4px;">错误</h4><ul style="margin:0 0 0 18px;">${errs}</ul>` : '<p style="margin-top:10px;">无错误</p>'}`);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ---------- 数据查询 ----------
+const DATA_TABS = [
+  { k: 'products', label: '商品', key: 'products', cols: [['product_id', '商品ID'], ['title', '标题'], ['category', '类目'], ['price', '价格'], ['status', '状态'], ['platform', '平台'], ['shop_name', '店铺']] },
+  { k: 'product-daily', label: '商品日报', key: 'rows', cols: [['report_date', '日期'], ['product_id', '商品ID'], ['visitors', '访客'], ['pay_amount', '支付金额'], ['refund_amount', '退款'], ['platform', '平台'], ['shop_name', '店铺']] },
+  { k: 'orders', label: '订单日报', key: 'rows', cols: [['report_date', '日期'], ['order_count', '订单数'], ['payed_order_count', '支付订单'], ['pay_amount', '支付金额'], ['refund_order_count', '退款订单'], ['refund_amount', '退款金额'], ['shop_name', '店铺']] },
+  { k: 'refunds', label: '退款日报', key: 'rows', cols: [['report_date', '日期'], ['refund_count', '退款笔数'], ['refund_amount', '退款金额'], ['refund_rate', '退款率'], ['reason_top', '主要原因'], ['shop_name', '店铺']] }
+];
+let dataTab = 'products';
+async function initDataView() {
+  const tabs = $('data-tabs');
+  if (tabs) tabs.innerHTML = DATA_TABS.map(t => `<button class="filter-btn ${t.k === dataTab ? 'active' : ''}" onclick="selectDataTab('${t.k}')">${t.label}</button>`).join('');
+  if (!$('data-start').value) { $('data-start').value = daysAgoStr(7); $('data-end').value = todayStr(); }
+  await fillShopSelect('data-shop');
+  loadDataView();
+}
+function selectDataTab(k) {
+  dataTab = k;
+  document.querySelectorAll('#data-tabs .filter-btn').forEach(b => b.classList.remove('active'));
+  const tabs = $('data-tabs');
+  if (tabs) tabs.innerHTML = DATA_TABS.map(t => `<button class="filter-btn ${t.k === dataTab ? 'active' : ''}" onclick="selectDataTab('${t.k}')">${t.label}</button>`).join('');
+  loadDataView();
+}
+async function loadDataView() {
+  const tab = DATA_TABS.find(t => t.k === dataTab);
+  const thead = $('data-thead');
+  const tbody = $('data-tbody');
+  if (!tab || !thead || !tbody) return;
+  thead.innerHTML = '<tr style="border-bottom:2px solid var(--border);text-align:left;">' + tab.cols.map(c => `<th style="padding:8px;">${c[1]}</th>`).join('') + '</tr>';
+  tbody.innerHTML = emptyState('查询中…', tab.cols.length);
+  const p = new URLSearchParams();
+  if ($('data-platform').value) p.set('platform', $('data-platform').value);
+  if ($('data-shop').value) p.set('shop_id', $('data-shop').value);
+  if ($('data-q').value && dataTab === 'products') p.set('q', $('data-q').value);
+  if ($('data-start').value && dataTab !== 'products') { p.set('date_start', $('data-start').value); p.set('date_end', $('data-end').value); }
+  try {
+    const data = await API.get('/stores/' + tab.k + '?' + p.toString());
+    const rows = data[tab.key] || [];
+    if (!rows.length) { tbody.innerHTML = emptyState('暂无数据，可前往「数据导入」上传 CSV', tab.cols.length); return; }
+    tbody.innerHTML = rows.map(r => '<tr style="border-bottom:1px solid var(--border);">' + tab.cols.map(c => {
+      const v = r[c[0]];
+      return `<td style="padding:8px;">${v === null || v === undefined ? '—' : esc(typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : v)}</td>`;
+    }).join('') + '</tr>').join('');
+  } catch (e) { tbody.innerHTML = emptyState('加载失败：' + e.message, tab.cols.length); }
+}
+
+// ---------- 执行对账 ----------
+async function initReconcile() {
+  if (!$('recon-start').value) { $('recon-start').value = daysAgoStr(30); $('recon-end').value = todayStr(); }
+  await fillShopSelect('recon-shop');
+  loadReconcile();
+}
+async function loadReconcile() {
+  const tb = $('recon-tbody');
+  if (!tb) return;
+  const p = new URLSearchParams({ date_start: $('recon-start').value, date_end: $('recon-end').value });
+  if ($('recon-shop').value) p.set('shop_id', $('recon-shop').value);
+  tb.innerHTML = emptyState('查询中…', 9);
+  try {
+    const data = await API.get('/stores/reconcile/report?' + p.toString());
+    const s = data.summary || {};
+    $('recon-summary').innerHTML = [
+      ['可对账数', s.comparable, ''],
+      ['一致', s.matched, '#10b981'],
+      ['不一致', s.mismatched, '#dc2626'],
+      ['匹配率', (s.match_rate === null || s.match_rate === undefined ? '—' : s.match_rate + '%'), '']
+    ].map(([label, val, color]) => `<div class="metric-card"><div class="metric-label">${label}</div><div class="metric-value" style="color:${color || 'inherit'}">${val === undefined ? '—' : val}</div></div>`).join('');
+    const rows = data.rows || [];
+    if (!rows.length) { tb.innerHTML = emptyState('该时间范围内暂无执行记录', 9); return; }
+    tb.innerHTML = rows.map(r => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${r.id}</td>
+      <td style="padding:8px;">${esc(r.shop_name || '')}</td>
+      <td style="padding:8px;">${esc(r.action_type)}</td>
+      <td style="padding:8px;">${esc(r.target_campaign_id || '')}</td>
+      <td style="padding:8px;">${r.before_value ?? '—'}</td>
+      <td style="padding:8px;">${r.expected_value ?? '—'}</td>
+      <td style="padding:8px;">${r.actual_value ?? '—'}</td>
+      <td style="padding:8px;">${r.diff ?? '—'}</td>
+      <td style="padding:8px;">${r.matched === null ? '<span style="color:var(--text-muted);">无法比对</span>' : (r.matched ? '<span style="color:#10b981;">一致</span>' : '<span style="color:#dc2626;">不一致</span>')}</td>
+    </tr>`).join('');
+  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 9); }
+}
+async function exportReconcile() {
+  try {
+    const body = { name: '执行对账', report_type: 'reconcile_report', file_format: 'csv', date_start: $('recon-start').value, date_end: $('recon-end').value };
+    if ($('recon-shop').value) body.shop_ids = [Number($('recon-shop').value)];
+    const created = await API.post('/reports', body);
+    const token = localStorage.getItem('zy_token');
+    const resp = await fetch('/api/reports/' + created.id + '/download', { headers: { Authorization: 'Bearer ' + token } });
+    const blob = await resp.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'reconcile_report.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ---------- 智能体运行历史 ----------
+async function loadAgentRuns() {
+  const tb = $('agent-runs-tbody');
+  if (!tb) return;
+  tb.innerHTML = emptyState('加载中…', 7);
+  try {
+    const data = await API.get('/agent-runs');
+    const runs = data.runs || [];
+    if (!runs.length) { tb.innerHTML = emptyState('暂无智能体运行记录，去「AI 智能体」执行一次吧', 7); return; }
+    const srcMap = { llm: '大模型', template: '模板降级', rule: '规则' };
+    tb.innerHTML = runs.map(r => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${r.id}</td>
+      <td style="padding:8px;">${esc(r.agent_name || r.agent_id)}</td>
+      <td style="padding:8px;">${esc((r.input || '').slice(0, 24))}</td>
+      <td style="padding:8px;">${srcMap[r.source] || esc(r.source || '—')}</td>
+      <td style="padding:8px;">${r.duration_ms || 0}ms</td>
+      <td style="padding:8px;">${esc(r.created_at || '')}</td>
+      <td style="padding:8px;"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="viewAgentRun(${r.id})">详情</button></td>
+    </tr>`).join('');
+  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 7); }
+}
+async function viewAgentRun(id) {
+  try {
+    const r = await API.get('/agent-runs/' + id);
+    const body = r.result_parsed ? `<pre style="white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:8px;font-size:12px;">${esc(JSON.stringify(r.result_parsed, null, 2))}</pre>` : `<pre style="white-space:pre-wrap;background:var(--bg);padding:12px;border-radius:8px;font-size:12px;">${esc(r.result || '')}</pre>`;
+    openGenericModal('运行 #' + id + ' · ' + esc(r.agent_name || r.agent_id), `
+      <div style="margin-bottom:8px;">输入：${esc(r.input || '')}</div>
+      <div style="margin-bottom:8px;">来源：${esc(r.source)} ｜ 耗时：${r.duration_ms || 0}ms ｜ 时间：${esc(r.created_at || '')}</div>
+      ${body}`);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+// ---------- 用量统计 ----------
+async function initUsage() {
+  if (!$('usage-start').value) { $('usage-start').value = daysAgoStr(30); $('usage-end').value = todayStr(); }
+  loadUsage();
+}
+async function loadUsage() {
+  const tb = $('usage-tbody');
+  const atb = $('usage-agent-tbody');
+  if (!tb) return;
+  const p = new URLSearchParams({ date_start: $('usage-start').value, date_end: $('usage-end').value });
+  tb.innerHTML = emptyState('加载中…', 7);
+  try {
+    const data = await API.get('/usage/stats?' + p.toString());
+    const usage = data.usage || [];
+    tb.innerHTML = usage.length ? usage.map(u => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${esc(u.provider || '—')}</td>
+      <td style="padding:8px;">${esc(u.capability || '—')}</td>
+      <td style="padding:8px;">${esc(u.model || '—')}</td>
+      <td style="padding:8px;">${u.calls}</td>
+      <td style="padding:8px;">${fmtNum(u.tokens_in)}</td>
+      <td style="padding:8px;">${fmtNum(u.tokens_out)}</td>
+      <td style="padding:8px;">${Number(u.cost || 0).toFixed(4)}</td>
+    </tr>`).join('') : emptyState('该时间段暂无用量记录', 7);
+    const byAgent = (data.agent_runs && data.agent_runs.by_agent) || [];
+    atb.innerHTML = byAgent.length ? byAgent.map(a => `<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;">${esc(a.agent_name || a.agent_id)}</td>
+      <td style="padding:8px;">${a.runs}</td>
+      <td style="padding:8px;">${fmtNum(a.tokens_in)}</td>
+      <td style="padding:8px;">${fmtNum(a.tokens_out)}</td>
+      <td style="padding:8px;">${Number(a.cost || 0).toFixed(4)}</td>
+    </tr>`).join('') : emptyState('暂无智能体用量', 5);
+  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 7); }
+}
+
+// ---------- 安全中心 ----------
+async function loadSecurity() {
+  const box = $('security-2fa');
+  const status = $('security-status');
+  if (!box) return;
+  try {
+    const s = await API.get('/auth/security');
+    status.innerHTML = `密码最近修改：${esc(s.password_changed_at || '未知')} ｜ 密码策略：至少 ${s.password_policy.min_length} 位 ｜ 恢复码剩余：${s.recovery_codes_remaining}`;
+    if (s.totp_enabled) {
+      box.innerHTML = `<div style="color:#10b981;margin-bottom:10px;">已启用两步验证</div>
+        <div style="display:flex;gap:8px;"><input id="2fa-disable-code" placeholder="验证码或恢复码" style="padding:8px;border:1px solid var(--border);border-radius:6px;flex:1;">
+        <button class="btn btn-outline btn-sm" onclick="disable2FA()">关闭 2FA</button></div>`;
+    } else {
+      box.innerHTML = `<div style="color:var(--text-muted);margin-bottom:10px;">未启用。启用后登录需输入动态验证码。</div>
+        <button class="btn btn-primary btn-sm" onclick="start2FASetup()">启用两步验证</button>
+        <div id="2fa-setup-box" style="margin-top:12px;"></div>`;
+    }
+  } catch (e) { box.innerHTML = `<span style="color:#dc2626;">${esc(e.message)}</span>`; }
+}
+async function start2FASetup() {
+  try {
+    const data = await API.post('/auth/2fa/setup');
+    $('2fa-setup-box').innerHTML = `
+      <div style="background:var(--bg);padding:12px;border-radius:8px;">
+        <div>密钥（手动录入验证器）：<code style="user-select:all;">${esc(data.secret)}</code></div>
+        <div style="margin-top:6px;word-break:break-all;font-size:11px;color:var(--text-muted);">${esc(data.otpauth_url)}</div>
+        <div style="margin-top:8px;">恢复码（请妥善保存，仅显示一次）：</div>
+        <div style="font-family:monospace;margin-top:4px;">${data.recovery_codes.map(esc).join('　')}</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:10px;"><input id="2fa-verify-code" placeholder="输入验证器动态码" style="padding:8px;border:1px solid var(--border);border-radius:6px;flex:1;">
+      <button class="btn btn-primary btn-sm" onclick="verify2FA()">确认启用</button></div>`;
+  } catch (e) { showToast(e.message, 'error'); }
+}
+async function verify2FA() {
+  try {
+    await API.post('/auth/2fa/verify', { code: $('2fa-verify-code').value.trim() });
+    showToast('两步验证已启用', 'success');
+    loadSecurity();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+async function disable2FA() {
+  const code = $('2fa-disable-code').value.trim();
+  const password = prompt('请输入当前密码以关闭两步验证');
+  if (!password) return;
+  try {
+    await API.post('/auth/2fa/disable', { password, code });
+    showToast('两步验证已关闭', 'success');
+    loadSecurity();
+  } catch (e) { showToast(e.message, 'error'); }
+}
+async function changePassword() {
+  const current = $('pwd-current').value;
+  const next = $('pwd-new').value;
+  if (!current || !next) { showToast('请填写当前密码与新密码', 'warn'); return; }
+  try {
+    const data = await API.post('/auth/password', { current_password: current, new_password: next });
+    if (data.token) localStorage.setItem('zy_token', data.token);
+    $('pwd-current').value = ''; $('pwd-new').value = '';
+    showToast('密码已修改', 'success');
+    loadSecurity();
+  } catch (e) { showToast(e.message, 'error'); }
+}
 </script>
 <script>
 fetch('/api/auth/config').then(r => r.json()).then(config => {
   document.getElementById('registration-tab').style.display = config.registration_enabled ? '' : 'none';
 }).catch(() => {});
 </script>
+
+<!-- 通用详情弹窗 -->
+<div id="modal-generic" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
+  <div style="background:#fff;border-radius:12px;padding:24px;width:640px;max-width:92vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+    <div class="flex-between mb-16">
+      <h3 id="generic-title" style="margin:0;font-size:18px;">详情</h3>
+      <button class="btn btn-outline btn-sm" onclick="closeModal('modal-generic')">关闭</button>
+    </div>
+    <div id="generic-body" style="font-size:13px;color:var(--text-secondary);"></div>
+  </div>
+</div>
 </body>
 </html>
