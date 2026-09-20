@@ -1,0 +1,30 @@
+{
+  "name": "ecom-ai-project-cn",
+  "version": "1.0.0",
+  "description": "国内电商AI项目 - 50+店铺规模化经营AI SaaS平台（多店铺管理 + AI智能体 + RPA自动执行）",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "backup": "node scripts/backup.js",
+    "drill": "node scripts/drill.js",
+    "restore-pg": "node scripts/restore-pg.js",
+    "setup-demo": "node scripts/setup-demo.js",
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "init-db": "node -e \"require('dotenv').config(); require('./server/db')\""
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1136.0",
+    "@aws-sdk/s3-request-presigner": "^3.1136.0",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^6.3.8",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "ioredis": "^5.11.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "pg": "^8.23.0"
+  }
+}
