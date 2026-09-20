@@ -117,4 +117,33 @@ router.post('/users/:id/impersonate', asyncH(async (req, res) => {
   res.json({ token, expires_in: 900, tenant_id: target.tenant_id, user: { id: target.id, username: target.username } });
 }));
 
+// ========== AI Provider 热更新（§4）==========
+// 运行期重载 provider 配置（不重启）；可写入内存配置或从环境变量重载。
+router.get('/ai/providers', asyncH(async (req, res) => {
+  const registry = require('../integrations/registry');
+  res.json({ providers: registry.describe() });
+}));
+
+router.put('/ai/providers', asyncH(async (req, res) => {
+  const { providers } = req.body || {};
+  if (!Array.isArray(providers) || !providers.length) return res.status(400).json({ error: 'providers 须为非空数组' });
+  for (const p of providers) {
+    if (!p || typeof p !== 'object' || !p.id || !Array.isArray(p.caps) || !p.caps.length) {
+      return res.status(400).json({ error: '每个 provider 需包含 id 与 caps' });
+    }
+  }
+  process.env.AI_PROVIDERS = JSON.stringify(providers);
+  const registry = require('../integrations/registry');
+  registry.reloadProviders();
+  await audit(1, req.user.id, 'ai_providers_update', 'ai_provider', null, { count: providers.length });
+  res.json({ providers: registry.describe() });
+}));
+
+router.post('/ai/providers/reload', asyncH(async (req, res) => {
+  const registry = require('../integrations/registry');
+  registry.reloadProviders();
+  await audit(1, req.user.id, 'ai_providers_reload', 'ai_provider', null, null);
+  res.json({ providers: registry.describe() });
+}));
+
 module.exports = router;
