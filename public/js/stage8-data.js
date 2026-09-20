@@ -14,6 +14,7 @@ async function initDataView() {
   if (tabs) tabs.innerHTML = DATA_TABS.map(t => `<button class="filter-btn ${t.k === dataTab ? 'active' : ''}" onclick="selectDataTab('${t.k}')">${t.label}</button>`).join('');
   if (!$('data-start').value) { $('data-start').value = daysAgoStr(7); $('data-end').value = todayStr(); }
   await fillShopSelect('data-shop');
+  pagerReset('data');
   loadDataView();
 }
 function selectDataTab(k) {
@@ -21,6 +22,7 @@ function selectDataTab(k) {
   document.querySelectorAll('#data-tabs .filter-btn').forEach(b => b.classList.remove('active'));
   const tabs = $('data-tabs');
   if (tabs) tabs.innerHTML = DATA_TABS.map(t => `<button class="filter-btn ${t.k === dataTab ? 'active' : ''}" onclick="selectDataTab('${t.k}')">${t.label}</button>`).join('');
+  pagerReset('data');
   loadDataView();
 }
 async function loadDataView() {
@@ -28,6 +30,7 @@ async function loadDataView() {
   const thead = $('data-thead');
   const tbody = $('data-tbody');
   if (!tab || !thead || !tbody) return;
+  pagerRegister('data', 100, 'loadDataView');
   thead.innerHTML = '<tr style="border-bottom:2px solid var(--border);text-align:left;">' + tab.cols.map(c => `<th style="padding:8px;">${c[1]}</th>`).join('') + '</tr>';
   tbody.innerHTML = emptyState('查询中…', tab.cols.length);
   const p = new URLSearchParams();
@@ -36,13 +39,13 @@ async function loadDataView() {
   if ($('data-q').value && dataTab === 'products') p.set('q', $('data-q').value);
   if ($('data-start').value && dataTab !== 'products') { p.set('date_start', $('data-start').value); p.set('date_end', $('data-end').value); }
   try {
-    const data = await API.get('/stores/' + tab.k + '?' + p.toString());
+    const data = await API.get('/stores/' + tab.k + '?' + p.toString() + '&' + pagerQuery('data'));
     const rows = data[tab.key] || [];
-    if (!rows.length) { tbody.innerHTML = emptyState('暂无数据，可前往「数据导入」上传 CSV', tab.cols.length); return; }
+    if (!rows.length) { tbody.innerHTML = emptyState('暂无数据，可前往「数据导入」上传 CSV', tab.cols.length) + pagerBar('data', tab.cols.length); return; }
     tbody.innerHTML = rows.map(r => '<tr style="border-bottom:1px solid var(--border);">' + tab.cols.map(c => {
       const v = r[c[0]];
       return `<td style="padding:8px;">${v === null || v === undefined ? '—' : esc(typeof v === 'number' ? String(Math.round(v * 10000) / 10000) : v)}</td>`;
-    }).join('') + '</tr>').join('');
+    }).join('') + '</tr>').join('') + pagerBar('data', tab.cols.length);
   } catch (e) { tbody.innerHTML = emptyState('加载失败：' + e.message, tab.cols.length); }
 }
 

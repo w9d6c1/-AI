@@ -132,10 +132,12 @@ router.post('/agents/:id/run', asyncH(async (req, res) => {
 // 执行历史（含结构化结果）
 router.get('/agent-runs', asyncH(async (req, res) => {
   const t = requireTenant();
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
   const runs = await repos.adapter.all(
     `SELECT id, agent_id, agent_name, input, result, result_parsed, source, tokens_est, duration_ms, created_at
-     FROM agent_runs WHERE user_id=? AND tenant_id=? ORDER BY id DESC LIMIT 50`,
-    [req.user.id, t]
+     FROM agent_runs WHERE user_id=? AND tenant_id=? ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [req.user.id, t, limit, offset]
   );
 
   const parsed = runs.map(r => {
@@ -144,7 +146,7 @@ router.get('/agent-runs', asyncH(async (req, res) => {
     return { ...r, result_parsed: structured };
   });
 
-  res.json({ runs: parsed });
+  res.json({ runs: parsed, limit, offset });
 }));
 
 // 获取单次执行详情

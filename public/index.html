@@ -1462,7 +1462,8 @@ input, textarea, select { font-family:inherit; outline:none; }
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
               <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
                 <th style="padding:8px;">名称</th><th style="padding:8px;">类型</th>
-                <th style="padding:8px;">默认</th><th style="padding:8px;">创建时间</th>
+                <th style="padding:8px;">默认</th><th style="padding:8px;">默认配置</th>
+                <th style="padding:8px;">创建时间</th>
                 <th style="padding:8px;">操作</th>
               </tr></thead>
               <tbody id="report-templates-list"></tbody>
@@ -1487,7 +1488,7 @@ input, textarea, select { font-family:inherit; outline:none; }
             <input id="audit-date-start" type="date" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" />
             <span style="color:var(--text-muted);">至</span>
             <input id="audit-date-end" type="date" style="padding:6px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;" />
-            <button class="btn btn-primary btn-sm" onclick="loadAuditLogs()">查询</button>
+            <button class="btn btn-primary btn-sm" onclick="pagerReset('audit');loadAuditLogs()">查询</button>
           </div>
           <button class="btn btn-outline btn-sm" onclick="loadAuditLogs()">刷新</button>
         </div>
@@ -1575,7 +1576,7 @@ input, textarea, select { font-family:inherit; outline:none; }
             <input id="data-start" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
             <span style="color:var(--text-muted);">至</span>
             <input id="data-end" type="date" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
-            <button class="btn btn-primary btn-sm" onclick="loadDataView()">查询</button>
+            <button class="btn btn-primary btn-sm" onclick="pagerReset('data');loadDataView()">查询</button>
           </div>
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -1777,6 +1778,7 @@ input, textarea, select { font-family:inherit; outline:none; }
                 <option value="roi_analysis">ROI分析</option>
                 <option value="alert_summary">预警汇总</option>
                 <option value="execution_report">执行报告</option>
+                <option value="reconcile_report">执行对账</option>
               </select>
             </div>
             <div style="display:flex;gap:12px;">
@@ -2225,8 +2227,8 @@ function renderAccountTable(d) {
     </tr>`);
   }
   for (const a of accounts) {
-    rows.push(`<tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:8px;">${esc(a.account_id)}</td>
+    rows.push(`<tr style="border-bottom:1px solid var(--border);cursor:pointer;" data-account="${esc(a.account_id)}" onclick="viewAccountCampaigns(this.dataset.account)" title="点击查看该账号计划明细">
+      <td style="padding:8px;color:var(--primary);">${esc(a.account_id)}</td>
       <td style="padding:8px;">${esc(platformLabel[a.platform] || a.platform || '—')}</td>
       <td style="padding:8px;">${money(a.cost)}</td>
       <td style="padding:8px;">${money(a.pay)}</td>
@@ -2235,6 +2237,32 @@ function renderAccountTable(d) {
     </tr>`);
   }
   tb.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted);">暂无广告账号数据，可通过「数据导入」上传广告计划 CSV</td></tr>';
+}
+
+async function viewAccountCampaigns(accountId) {
+  if (!accountId) return;
+  const money = v => '¥' + Number(v || 0).toLocaleString('zh-CN');
+  try {
+    const data = await API.get('/dashboard/accounts/' + encodeURIComponent(accountId) + '/campaigns?range=' + currentRange);
+    const rows = data.campaigns || [];
+    openGenericModal('账号 ' + accountId + ' · 计划明细', rows.length
+      ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+            <th style="padding:6px;">计划</th><th style="padding:6px;">花费</th><th style="padding:6px;">成交</th>
+            <th style="padding:6px;">ROI</th><th style="padding:6px;">展现</th><th style="padding:6px;">点击</th><th style="padding:6px;">天数</th>
+          </tr></thead>
+          <tbody>${rows.map(c => `<tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:6px;">${esc(c.campaign_name || c.campaign_id)}</td>
+            <td style="padding:6px;">${money(c.cost)}</td>
+            <td style="padding:6px;">${money(c.pay)}</td>
+            <td style="padding:6px;">${c.roi}</td>
+            <td style="padding:6px;">${c.impressions}</td>
+            <td style="padding:6px;">${c.clicks}</td>
+            <td style="padding:6px;">${c.days}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>`
+      : '<div style="color:var(--text-muted);">该账号在所选范围内暂无计划数据</div>');
+  } catch (e) { showToast(e.message, 'error'); }
 }
 
 // ---------- AI 对话 ----------
@@ -4131,14 +4159,15 @@ function escapeHtml(value) {
   const el = document.createElement('span'); el.textContent = String(value ?? ''); return el.innerHTML;
 }
 async function loadReports() {
+  pagerRegister('reports', 30, 'loadReports');
   try {
-    const res = await API.get('/reports?limit=50');
+    const res = await API.get('/reports?' + pagerQuery('reports'));
     const tb = $('reports-tbody');
     if (!tb) return;
     const reports = res.reports || [];
     const typeMap = { daily_summary: '日报汇总', weekly_trend: '周报趋势', roi_analysis: 'ROI分析', alert_summary: '预警汇总', execution_report: '执行报告' };
     const statusMap = { pending: { label: '生成中', color: '#f59e0b' }, completed: { label: '已完成', color: '#10b981' }, failed: { label: '失败', color: '#ef4444' } };
-    if (!reports.length) { tb.innerHTML = '<tr><td colspan="9" style="padding:16px;text-align:center;color:var(--text-muted);">暂无报表，点击"生成报表"创建</td></tr>'; } else {
+    if (!reports.length) { tb.innerHTML = '<tr><td colspan="9" style="padding:16px;text-align:center;color:var(--text-muted);">暂无报表，点击"生成报表"创建</td></tr>' + pagerBar('reports', 9); } else {
     tb.innerHTML = reports.map(r => {
       const st = statusMap[r.status] || { label: r.status, color: '#64748b' };
       const sizeKB = r.file_size ? (r.file_size / 1024).toFixed(1) + ' KB' : '—';
@@ -4155,7 +4184,7 @@ async function loadReports() {
         <td style="padding:8px;font-size:11px;">${r.created_at}</td>
         <td style="padding:8px;display:flex;gap:4px;">${dlBtn}<button class="btn btn-outline" style="padding:2px 8px;font-size:11px;color:#ef4444;" onclick="deleteReport(${r.id})">删除</button></td>
       </tr>`;
-    }).join('');
+    }).join('') + pagerBar('reports', 9);
     }
     // 同时加载分析概览
     loadAnalytics();
@@ -4272,20 +4301,20 @@ async function deleteReport(id) {
 
 // ===== 审计日志 =====
 async function loadAuditLogs() {
+  pagerRegister('audit', 50, 'loadAuditLogs');
   try {
     const action = $('audit-action-filter')?.value || '';
     const dateStart = $('audit-date-start')?.value || '';
     const dateEnd = $('audit-date-end')?.value || '';
-    const params = new URLSearchParams();
+    const params = new URLSearchParams(pagerQuery('audit'));
     if (action) params.set('action', action);
     if (dateStart) params.set('date_start', dateStart);
     if (dateEnd) params.set('date_end', dateEnd);
-    params.set('limit', '100');
     const res = await API.get('/stores/audit-logs?' + params.toString());
     const tb = $('audit-tbody');
     if (!tb) return;
     const logs = res.logs || [];
-    if (!logs.length) { tb.innerHTML = '<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--text-muted);">暂无操作记录</td></tr>'; return; }
+    if (!logs.length) { tb.innerHTML = '<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--text-muted);">暂无操作记录</td></tr>' + pagerBar('audit', 8); return; }
     const actionMap = { create: '创建', update: '更新', delete: '删除', execute: '执行', login: '登录', collect: '采集', review: '审核', toggle: '切换' };
     const actionColor = { create: '#10b981', update: '#3b82f6', delete: '#ef4444', execute: '#f59e0b', login: '#8b5cf6', collect: '#06b6d4', review: '#ec4899', toggle: '#64748b' };
     tb.innerHTML = logs.map(l => {
@@ -4303,7 +4332,7 @@ async function loadAuditLogs() {
         <td style="padding:8px;font-size:11px;color:var(--text-muted);max-width:200px;overflow:hidden;text-overflow:ellipsis;">${detailStr}</td>
         <td style="padding:8px;font-size:11px;color:var(--text-muted);">${l.ip_address || '—'}</td>
       </tr>`;
-    }).join('');
+    }).join('') + pagerBar('audit', 8);
   } catch (e) { showToast('加载审计日志失败: ' + e.message, 'error'); }
 }
 

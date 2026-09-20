@@ -197,9 +197,10 @@ function dataQuery(req, shopIds, t, { table, orderBy }) {
   if (req.query.date_start) { query += ' AND d.report_date>=?'; params.push(req.query.date_start); }
   if (req.query.date_end) { query += ' AND d.report_date<=?'; params.push(req.query.date_end); }
   const limit = Math.min(500, Math.max(1, Number(req.query.limit) || 100));
-  query += ` ORDER BY ${orderBy} LIMIT ?`;
-  params.push(limit);
-  return { query, params };
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  query += ` ORDER BY ${orderBy} LIMIT ? OFFSET ?`;
+  params.push(limit, offset);
+  return { query, params, limit, offset };
 }
 
 router.get('/stores/products', asyncH(async (req, res) => {
@@ -212,31 +213,32 @@ router.get('/stores/products', asyncH(async (req, res) => {
   if (req.query.status) { query += ' AND p.status=?'; params.push(req.query.status); }
   if (req.query.q) { query += ' AND p.title LIKE ?'; params.push('%' + req.query.q + '%'); }
   const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
-  query += ' ORDER BY p.id DESC LIMIT ?';
-  params.push(limit);
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  query += ' ORDER BY p.id DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
   const products = await repos.adapter.all(query, params);
-  res.json({ products });
+  res.json({ products, limit, offset });
 }));
 
 router.get('/stores/product-daily', asyncH(async (req, res) => {
   const t = requireTenant();
   const shopIds = await getAccessibleShopIds(req.user);
-  const { query, params } = dataQuery(req, shopIds, t, { table: 'product_daily', orderBy: 'd.report_date DESC, d.pay_amount DESC' });
-  res.json({ rows: await repos.adapter.all(query, params) });
+  const { query, params, limit, offset } = dataQuery(req, shopIds, t, { table: 'product_daily', orderBy: 'd.report_date DESC, d.pay_amount DESC' });
+  res.json({ rows: await repos.adapter.all(query, params), limit, offset });
 }));
 
 router.get('/stores/orders', asyncH(async (req, res) => {
   const t = requireTenant();
   const shopIds = await getAccessibleShopIds(req.user);
-  const { query, params } = dataQuery(req, shopIds, t, { table: 'orders_daily', orderBy: 'd.report_date DESC' });
-  res.json({ rows: await repos.adapter.all(query, params) });
+  const { query, params, limit, offset } = dataQuery(req, shopIds, t, { table: 'orders_daily', orderBy: 'd.report_date DESC' });
+  res.json({ rows: await repos.adapter.all(query, params), limit, offset });
 }));
 
 router.get('/stores/refunds', asyncH(async (req, res) => {
   const t = requireTenant();
   const shopIds = await getAccessibleShopIds(req.user);
-  const { query, params } = dataQuery(req, shopIds, t, { table: 'refunds_daily', orderBy: 'd.report_date DESC' });
-  res.json({ rows: await repos.adapter.all(query, params) });
+  const { query, params, limit, offset } = dataQuery(req, shopIds, t, { table: 'refunds_daily', orderBy: 'd.report_date DESC' });
+  res.json({ rows: await repos.adapter.all(query, params), limit, offset });
 }));
 
 router.get('/stores/compare', asyncH(async (req, res) => {
@@ -704,9 +706,14 @@ router.get('/stores/audit-logs', asyncH(async (req, res) => {
   if (req.query.user_id) { query += ' AND user_id=?'; params.push(Number(req.query.user_id)); }
   if (req.query.shop_id) { query += ' AND shop_id=?'; params.push(Number(req.query.shop_id)); }
   if (req.query.action) { query += ' AND action=?'; params.push(req.query.action); }
-  query += ' ORDER BY created_at DESC LIMIT 200';
+  if (req.query.date_start) { query += ' AND created_at >= ?'; params.push(req.query.date_start); }
+  if (req.query.date_end) { query += ' AND created_at <= ?'; params.push(req.query.date_end + ' 23:59:59'); }
+  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
+  const offset = Math.max(0, Number(req.query.offset) || 0);
+  query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+  params.push(limit, offset);
   const logs = await repos.adapter.all(query, params);
-  res.json({ logs });
+  res.json({ logs, limit, offset });
 }));
 
 module.exports = router;

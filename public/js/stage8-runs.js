@@ -5,11 +5,12 @@
 async function loadAgentRuns() {
   const tb = $('agent-runs-tbody');
   if (!tb) return;
+  pagerRegister('runs', 50, 'loadAgentRuns');
   tb.innerHTML = emptyState('加载中…', 7);
   try {
-    const data = await API.get('/agent-runs');
+    const data = await API.get('/agent-runs?' + pagerQuery('runs'));
     const runs = data.runs || [];
-    if (!runs.length) { tb.innerHTML = emptyState('暂无智能体运行记录，去「AI 智能体」执行一次吧', 7); return; }
+    if (!runs.length) { tb.innerHTML = emptyState('暂无智能体运行记录，去「AI 智能体」执行一次吧', 7) + pagerBar('runs', 7); return; }
     const srcMap = { llm: '大模型', template: '模板降级', rule: '规则' };
     tb.innerHTML = runs.map(r => `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px;">${r.id}</td>
@@ -19,7 +20,7 @@ async function loadAgentRuns() {
       <td style="padding:8px;">${r.duration_ms || 0}ms</td>
       <td style="padding:8px;">${esc(r.created_at || '')}</td>
       <td style="padding:8px;"><button class="btn btn-outline" style="padding:2px 8px;font-size:11px;" onclick="viewAgentRun(${r.id})">详情</button></td>
-    </tr>`).join('');
+    </tr>`).join('') + pagerBar('runs', 7);
   } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 7); }
 }
 async function viewAgentRun(id) {

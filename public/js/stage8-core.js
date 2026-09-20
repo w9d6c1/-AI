@@ -31,3 +31,33 @@ async function authedFetch(path, opts = {}) {
   return fetch('/api' + path, { ...opts, headers });
 }
 
+// ---------- 通用列表分页 ----------
+// 各列表在加载时用 pagerRegister(key, limit, 'reloadFnName') 注册；
+// 渲染时把 pagerBar(key, colspan) 追加到 tbody 末尾；查询串用 pagerQuery(key)。
+const PAGER = {};
+function pagerRegister(key, limit, reloadName) {
+  if (!PAGER[key]) PAGER[key] = { offset: 0, limit: limit || 50, reloadName };
+  return PAGER[key];
+}
+function pagerGet(key) { return PAGER[key] || { offset: 0, limit: 50, reloadName: null }; }
+function pagerReset(key) { const s = PAGER[key]; if (s) s.offset = 0; }
+function pagerMove(key, dir) {
+  const s = PAGER[key];
+  if (!s) return;
+  const next = s.offset + dir * s.limit;
+  if (next < 0) return;
+  s.offset = next;
+  if (s.reloadName && typeof window[s.reloadName] === 'function') window[s.reloadName]();
+}
+function pagerQuery(key) { const s = pagerGet(key); return 'limit=' + s.limit + '&offset=' + s.offset; }
+function pagerBar(key, colspan) {
+  const s = pagerGet(key);
+  const page = Math.floor(s.offset / s.limit) + 1;
+  const prevDis = s.offset <= 0 ? 'disabled style="opacity:0.4;cursor:not-allowed;"' : '';
+  return `<tr><td colspan="${colspan}" style="padding:10px;text-align:right;border-top:1px solid var(--border);">
+    <button class="btn btn-outline btn-sm" ${prevDis} onclick="pagerMove('${key}',-1)">上一页</button>
+    <span style="margin:0 8px;font-size:12px;color:var(--text-muted);">第 ${page} 页</span>
+    <button class="btn btn-outline btn-sm" onclick="pagerMove('${key}',1)">下一页</button>
+  </td></tr>`;
+}
+

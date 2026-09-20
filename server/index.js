@@ -136,6 +136,14 @@ app.get('/api/dashboard/stats', authRequired, asyncH(async (req, res) => {
   res.json(await getDashboardStats({ shopIds, range: req.query.range || '30d' }));
 }));
 
+// 看板账号维度下钻：某广告账号的计划明细
+app.get('/api/dashboard/accounts/:accountId/campaigns', authRequired, asyncH(async (req, res) => {
+  const { resolveShopIds } = require('./access');
+  const { getAccountCampaigns } = require('./dashboard');
+  const shopIds = await resolveShopIds(req.user, req.query.shop_ids);
+  res.json(await getAccountCampaigns({ accountId: req.params.accountId, shopIds, range: req.query.range || '30d' }));
+}));
+
 // 文件上传（AI 对话附件 / 图生图参考图等）
 app.post('/api/upload', authRequired, upload.single('file'), async (req, res, next) => {
   try {

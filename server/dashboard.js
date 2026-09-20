@@ -181,4 +181,36 @@ async function getDashboardStats({ shopIds = [], range = '30d' } = {}) {
   return { metrics, trend, channels, ad, topProducts, accounts, platforms, range, date_range: { start, end }, shop_count: Number(cur.shop_count) };
 }
 
-module.exports = { getDashboardStats, RANGE_DAYS };
+// 账号维度下钻：某广告账号下的计划明细
+async function getAccountCampaigns({ accountId, shopIds = [], range = '30d' } = {}) {
+  const t = requireTenant();
+  const days = RANGE_DAYS[range] || 30;
+  const end = todayLocal();
+  const start = dateLocalOffset(-(days - 1));
+  const ph = shopFilter(shopIds);
+  const out = { account_id: accountId || null, campaigns: [], date_range: { start, end } };
+  if (!shopIds.length || !accountId) return out;
+  const rows = await repos.adapter.all(
+    `SELECT campaign_id, MAX(campaign_name) campaign_name, MAX(platform) platform,
+            SUM(cost) cost, SUM(pay_amount) pay, SUM(impressions) impressions, SUM(clicks) clicks,
+            COUNT(DISTINCT report_date) days
+     FROM ad_campaigns
+     WHERE tenant_id=? AND shop_id IN (${ph}) AND report_date BETWEEN ? AND ? AND account_id=?
+     GROUP BY campaign_id ORDER BY cost DESC LIMIT 100`,
+    [t, start, end, accountId]
+  );
+  out.campaigns = rows.map(r => ({
+    campaign_id: r.campaign_id,
+    campaign_name: r.campaign_name,
+    platform: r.platform || null,
+    cost: Math.round(Number(r.cost) * 100) / 100,
+    pay: Math.round(Number(r.pay) * 100) / 100,
+    roi: Number(r.cost) > 0 ? Math.round((Number(r.pay) / Number(r.cost)) * 100) / 100 : 0,
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    days: Number(r.days)
+  }));
+  return out;
+}
+
+module.exports = { getDashboardStats, getAccountCampaigns, RANGE_DAYS };

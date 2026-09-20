@@ -38,19 +38,19 @@ router.get('/analytics/overview', asyncH(async (req, res) => {
 router.get('/reports', asyncH(async (req, res) => {
   const t = requireTenant();
   const limit = Math.min(100, Math.max(1, Math.trunc(Number(req.query.limit) || 30)));
+  const offset = Math.max(0, Math.trunc(Number(req.query.offset) || 0));
   const records = isAdmin(req.user)
-    ? await repos.adapter.all('SELECT * FROM report_records WHERE tenant_id=? ORDER BY id DESC LIMIT ?', [t, limit])
-    : await repos.adapter.all('SELECT * FROM report_records WHERE created_by=? AND tenant_id=? ORDER BY id DESC', [req.user.id, t]);
+    ? await repos.adapter.all('SELECT * FROM report_records WHERE tenant_id=? ORDER BY id DESC LIMIT ? OFFSET ?', [t, limit, offset])
+    : await repos.adapter.all('SELECT * FROM report_records WHERE created_by=? AND tenant_id=? ORDER BY id DESC LIMIT ? OFFSET ?', [req.user.id, t, limit, offset]);
   const accessible = [];
   for (const r of records) {
     if (await canAccessReport(req.user, r)) accessible.push(r);
-    if (accessible.length >= limit) break;
   }
   const reports = accessible.map(r => {
     const { file_path, ...publicRecord } = r;
     return { ...publicRecord, shop_ids: r.shop_ids ? JSON.parse(r.shop_ids) : null };
   });
-  res.json({ reports });
+  res.json({ reports, limit, offset });
 }));
 router.post('/reports', rateLimiter(60000, 30), asyncH(async (req, res) => {
   const body = req.body || {};
