@@ -1791,6 +1791,9 @@ input, textarea, select { font-family:inherit; outline:none; }
                 <option value="json">JSON</option>
               </select>
             </div>
+            <div><label style="font-size:13px;display:block;margin-bottom:4px;">店铺范围 <span style="color:var(--text-muted);font-size:11px;">（不选=全部可访问店铺，可多选）</span></label>
+              <select id="report-shop-ids" multiple size="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></select>
+            </div>
             <div style="display:flex;gap:8px;margin-top:8px;">
               <button class="btn btn-primary" style="flex:1;" onclick="submitReportForm()">生成报表</button>
               <button class="btn btn-outline" onclick="closeModal('modal-report')">取消</button>
@@ -2239,13 +2242,16 @@ function renderAccountTable(d) {
   tb.innerHTML = rows.length ? rows.join('') : '<tr><td colspan="6" style="padding:24px;text-align:center;color:var(--text-muted);">暂无广告账号数据，可通过「数据导入」上传广告计划 CSV</td></tr>';
 }
 
+let _acctTrendChart = null;
 async function viewAccountCampaigns(accountId) {
   if (!accountId) return;
   const money = v => '¥' + Number(v || 0).toLocaleString('zh-CN');
   try {
     const data = await API.get('/dashboard/accounts/' + encodeURIComponent(accountId) + '/campaigns?range=' + currentRange);
     const rows = data.campaigns || [];
-    openGenericModal('账号 ' + accountId + ' · 计划明细', rows.length
+    const trend = data.trend || [];
+    const chartHtml = trend.length ? '<div id="acct-trend-chart" style="height:220px;margin-bottom:12px;"></div>' : '';
+    const tableHtml = rows.length
       ? `<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">
           <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
             <th style="padding:6px;">计划</th><th style="padding:6px;">花费</th><th style="padding:6px;">成交</th>
@@ -2261,8 +2267,30 @@ async function viewAccountCampaigns(accountId) {
             <td style="padding:6px;">${c.days}</td>
           </tr>`).join('')}</tbody>
         </table></div>`
-      : '<div style="color:var(--text-muted);">该账号在所选范围内暂无计划数据</div>');
+      : '<div style="color:var(--text-muted);">该账号在所选范围内暂无计划数据</div>';
+    openGenericModal('账号 ' + accountId + ' · 计划明细', chartHtml + tableHtml);
+    renderAccountTrend(trend);
   } catch (e) { showToast(e.message, 'error'); }
+}
+
+function renderAccountTrend(trend) {
+  const el = $('acct-trend-chart');
+  if (!el) return;
+  if (_acctTrendChart) { try { _acctTrendChart.dispose(); } catch (_) { /* ignore */ } _acctTrendChart = null; }
+  if (!window.echarts || !trend.length) return;
+  _acctTrendChart = echarts.init(el);
+  _acctTrendChart.setOption({
+    tooltip: { trigger: 'axis' },
+    legend: { data: ['花费', '成交'], right: 0, textStyle: { fontSize: 11 } },
+    grid: { left: 50, right: 16, top: 30, bottom: 26 },
+    xAxis: { type: 'category', data: trend.map(t => t.date), axisLabel: { fontSize: 10 } },
+    yAxis: { type: 'value', axisLabel: { fontSize: 10 } },
+    series: [
+      { name: '花费', type: 'line', data: trend.map(t => t.cost), smooth: true, itemStyle: { color: '#ef4444' } },
+      { name: '成交', type: 'line', data: trend.map(t => t.pay), smooth: true, itemStyle: { color: '#10b981' } }
+    ]
+  });
+  new ResizeObserver(() => { if (_acctTrendChart) _acctTrendChart.resize(); }).observe(el);
 }
 
 // ---------- AI 对话 ----------
@@ -4245,7 +4273,7 @@ async function loadAnalytics() {
   } catch (e) { showToast('加载分析数据失败: ' + e.message, 'error'); }
 }
 
-function showCreateReportForm() {
+async function showCreateReportForm() {
   const today = new Date().toISOString().slice(0, 10);
   const weekAgo = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
   $('report-name').value = '';
@@ -4253,6 +4281,7 @@ function showCreateReportForm() {
   $('report-date-start-modal').value = weekAgo;
   $('report-date-end-modal').value = today;
   $('report-format').value = 'csv';
+  await fillShopMultiSelect('report-shop-ids');
   openModal('modal-report');
 }
 
@@ -4265,7 +4294,11 @@ function submitReportForm() {
   if (!name) { showToast('请输入报表名称', 'error'); return; }
   if (!dateStart || !dateEnd) { showToast('请选择日期范围', 'error'); return; }
 
-  API.post('/reports', { name, report_type: reportType, date_start: dateStart, date_end: dateEnd, file_format: format })
+  const payload = { name, report_type: reportType, date_start: dateStart, date_end: dateEnd, file_format: format };
+  const shopIds = multiSelectValues('report-shop-ids');
+  if (shopIds.length) payload.shop_ids = shopIds;
+
+  API.post('/reports', payload)
     .then(res => {
       showToast('报表已生成，共 ' + res.row_count + ' 行', 'success');
       closeModal('modal-report');

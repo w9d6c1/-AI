@@ -107,12 +107,16 @@ test('S8-UI 知识库检索：空查询 400；命中片段带相关度', async (
   assert.ok(search.results[0].content.includes('退货'));
 });
 
-test('S8-UI 报表模板：创建/列表/越权删除 404/管理员删除', async () => {
-  const created = await json(await req('/report-templates', 'POST', { name: '每日日报模板', report_type: 'daily_summary', is_default: true }), 201);
+test('S8-UI 报表模板：创建（含 config）/列表/越权删除 404/管理员删除', async () => {
+  const created = await json(await req('/report-templates', 'POST', { name: '每日日报模板', report_type: 'daily_summary', is_default: true, config: { format: 'json', days: 7, shop_ids: [shopId] } }), 201);
   const tplId = created.template.id;
 
   const list = await json(await req('/report-templates'));
-  assert.ok(list.templates.some(t => t.id === tplId));
+  const tpl = list.templates.find(t => t.id === tplId);
+  assert.ok(tpl);
+  assert.equal(tpl.config_json.format, 'json');
+  assert.equal(tpl.config_json.days, 7);
+  assert.deepEqual(tpl.config_json.shop_ids, [shopId]);
 
   assert.equal((await req('/report-templates/' + tplId, 'DELETE', undefined, tokenMember)).status, 404);
 

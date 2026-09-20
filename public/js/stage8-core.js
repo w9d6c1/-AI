@@ -50,6 +50,14 @@ function pagerMove(key, dir) {
   if (s.reloadName && typeof window[s.reloadName] === 'function') window[s.reloadName]();
 }
 function pagerQuery(key) { const s = pagerGet(key); return 'limit=' + s.limit + '&offset=' + s.offset; }
+function pagerGoto(key) {
+  const s = PAGER[key];
+  if (!s) return;
+  const el = $('pager-jump-' + key);
+  const page = Math.max(1, Math.floor(Number(el && el.value) || 1));
+  s.offset = (page - 1) * s.limit;
+  if (s.reloadName && typeof window[s.reloadName] === 'function') window[s.reloadName]();
+}
 function pagerBar(key, colspan) {
   const s = pagerGet(key);
   const page = Math.floor(s.offset / s.limit) + 1;
@@ -58,6 +66,22 @@ function pagerBar(key, colspan) {
     <button class="btn btn-outline btn-sm" ${prevDis} onclick="pagerMove('${key}',-1)">上一页</button>
     <span style="margin:0 8px;font-size:12px;color:var(--text-muted);">第 ${page} 页</span>
     <button class="btn btn-outline btn-sm" onclick="pagerMove('${key}',1)">下一页</button>
+    <input id="pager-jump-${key}" type="number" min="1" value="${page}" style="width:56px;padding:2px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;margin-left:10px;" onkeydown="if(event.key==='Enter'){pagerGoto('${key}');}">
+    <button class="btn btn-outline btn-sm" onclick="pagerGoto('${key}')">跳转</button>
   </td></tr>`;
+}
+
+// ---------- 店铺多选（报表/模板范围） ----------
+async function fillShopMultiSelect(selectId, selectedIds) {
+  const sel = $(selectId);
+  if (!sel) return;
+  try {
+    const data = await API.get('/shops');
+    const set = new Set((selectedIds || []).map(Number));
+    sel.innerHTML = (data.shops || []).map(s => `<option value="${s.id}"${set.has(Number(s.id)) ? ' selected' : ''}>${esc(s.shop_name)}</option>`).join('');
+  } catch (_) { /* ignore */ }
+}
+function multiSelectValues(selectId) {
+  return [...document.querySelectorAll('#' + selectId + ' option:checked')].map(o => Number(o.value));
 }
 

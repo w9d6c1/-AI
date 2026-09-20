@@ -16,7 +16,7 @@ async function loadReportTemplates() {
     if (!list.length) { tb.innerHTML = emptyState('暂无模板，点击「新建模板」创建', 6); return; }
     tb.innerHTML = list.map(t => {
       const cfg = t.config_json || {};
-      const cfgText = [cfg.format ? String(cfg.format).toUpperCase() : '', cfg.days ? '近' + cfg.days + '天' : ''].filter(Boolean).join(' / ') || '—';
+      const cfgText = [cfg.format ? String(cfg.format).toUpperCase() : '', cfg.days ? '近' + cfg.days + '天' : '', (cfg.shop_ids && cfg.shop_ids.length) ? cfg.shop_ids.length + ' 店' : ''].filter(Boolean).join(' / ') || '—';
       return `<tr style="border-bottom:1px solid var(--border);">
       <td style="padding:8px;">${esc(t.name)}</td>
       <td style="padding:8px;">${esc(reportTypeLabel(t.report_type))}</td>
@@ -66,9 +66,12 @@ async function showCreateTemplateForm() {
             <option value="90">最近 90 天</option>
           </select></div>
       </div>
+      <div><label style="font-size:12px;">默认店铺范围 <span style="color:var(--text-muted);">（不选=全部，可多选）</span></label>
+        <select id="tpl-shop-ids" multiple size="4" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;"></select></div>
       <label style="font-size:12px;"><input type="checkbox" id="tpl-default"> 设为默认模板</label>
       <button class="btn btn-primary btn-sm" onclick="submitTemplateForm()">创建</button>
     </div>`);
+  await fillShopMultiSelect('tpl-shop-ids');
 }
 
 async function submitTemplateForm() {
@@ -76,6 +79,8 @@ async function submitTemplateForm() {
   const report_type = $('tpl-type').value;
   const is_default = $('tpl-default').checked;
   const config = { format: $('tpl-format').value, days: Number($('tpl-days').value) || 30 };
+  const shopIds = multiSelectValues('tpl-shop-ids');
+  if (shopIds.length) config.shop_ids = shopIds;
   if (!name) { showToast('请输入模板名称', 'warn'); return; }
   try {
     await API.post('/report-templates', { name, report_type, is_default, config });
@@ -92,10 +97,10 @@ function deleteTemplate(id) {
   }, { icon: '🗑️' });
 }
 
-function applyTemplate(id) {
+async function applyTemplate(id) {
   const t = reportTemplatesCache.find(x => x.id === id);
   if (!t) return;
-  if (typeof showCreateReportForm === 'function') showCreateReportForm();
+  if (typeof showCreateReportForm === 'function') await showCreateReportForm();
   const cfg = t.config_json || {};
   if ($('report-name')) $('report-name').value = t.name + ' · ' + todayStr();
   if ($('report-type')) $('report-type').value = t.report_type;
@@ -104,5 +109,6 @@ function applyTemplate(id) {
     $('report-date-start-modal').value = daysAgoStr(Number(cfg.days) - 1);
     $('report-date-end-modal').value = todayStr();
   }
+  if (cfg.shop_ids && cfg.shop_ids.length) await fillShopMultiSelect('report-shop-ids', cfg.shop_ids);
   showToast('已套用模板，请确认日期后生成', 'success');
 }

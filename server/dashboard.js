@@ -188,7 +188,7 @@ async function getAccountCampaigns({ accountId, shopIds = [], range = '30d' } = 
   const end = todayLocal();
   const start = dateLocalOffset(-(days - 1));
   const ph = shopFilter(shopIds);
-  const out = { account_id: accountId || null, campaigns: [], date_range: { start, end } };
+  const out = { account_id: accountId || null, campaigns: [], trend: [], date_range: { start, end } };
   if (!shopIds.length || !accountId) return out;
   const rows = await repos.adapter.all(
     `SELECT campaign_id, MAX(campaign_name) campaign_name, MAX(platform) platform,
@@ -209,6 +209,19 @@ async function getAccountCampaigns({ accountId, shopIds = [], range = '30d' } = 
     impressions: Number(r.impressions),
     clicks: Number(r.clicks),
     days: Number(r.days)
+  }));
+
+  const trendRows = await repos.adapter.all(
+    `SELECT report_date, SUM(cost) cost, SUM(pay_amount) pay FROM ad_campaigns
+     WHERE tenant_id=? AND shop_id IN (${ph}) AND report_date BETWEEN ? AND ? AND account_id=?
+     GROUP BY report_date ORDER BY report_date`,
+    [t, start, end, accountId]
+  );
+  out.trend = trendRows.map(r => ({
+    date: r.report_date,
+    cost: Math.round(Number(r.cost) * 100) / 100,
+    pay: Math.round(Number(r.pay) * 100) / 100,
+    roi: Number(r.cost) > 0 ? Math.round((Number(r.pay) / Number(r.cost)) * 100) / 100 : 0
   }));
   return out;
 }

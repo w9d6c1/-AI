@@ -108,6 +108,13 @@ test('S8-看板账号下钻：按 account_id 返回计划明细', async () => {
   assert.equal(c.roi, 4);
   assert.equal(c.days, 1);
 
+  assert.ok(Array.isArray(drill.trend));
+  assert.equal(drill.trend.length, 1);
+  assert.equal(drill.trend[0].date, today);
+  assert.equal(drill.trend[0].cost, 300);
+  assert.equal(drill.trend[0].pay, 700);
+
   const none = await json(await req('/dashboard/accounts/nope/campaigns?range=7d'));
   assert.equal(none.campaigns.length, 0);
+  assert.equal(none.trend.length, 0);
 });
