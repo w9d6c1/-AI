@@ -3,7 +3,7 @@ const express = require('express');
 const { repos } = require('../repositories');
 const { requireTenant } = require('../repositories/tenant-context');
 const { nowExpr } = require('../repositories/sql');
-const { enforceAiQuota } = require('../quota');
+const { enforceAiQuota, enforceCostQuota } = require('../quota');
 const { authRequired, asyncH } = require('../middleware');
 const { imageGen, sizeForRatio, localUploadToDataUri } = require('../ai');
 const { ownedFile, registerFile, signFile } = require('../files');
@@ -75,6 +75,7 @@ router.post('/competitor', asyncH(async (req, res) => {
   if (!target || !String(target).trim()) return res.status(400).json({ error: '请输入竞品链接或关键词' });
   const name = String(target).trim();
   await enforceAiQuota();
+  await enforceCostQuota();
   // 真实化：由竞品分析智能体（LLM，可降级框架）生成，不再返回硬编码假数据
   const result = await runAgent('a19', name, { userId: req.user.id });
   const report = result.result || {};
@@ -171,6 +172,7 @@ router.post('/images/generate', asyncH(async (req, res) => {
   }
 
   await enforceAiQuota();
+  await enforceCostQuota();
   const fullPrompt = style ? `（风格：${style}）${prompt}` : prompt;
   const result = await imageGen(fullPrompt, { n, size, image: refImage });
   const urls = result.urls || [];

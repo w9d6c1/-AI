@@ -7,6 +7,7 @@ const { nowExpr } = require('../repositories/sql');
 const { runWithTenant } = require('../repositories/tenant-context');
 const { authRequired, asyncH, requireRole, signImpersonation } = require('../middleware');
 const { todayLocal, dateLocalOffset } = require('../util');
+const { getTenantUsage, getTenantLimits, monthKey } = require('../quota');
 
 const router = express.Router();
 router.use(authRequired);
@@ -26,15 +27,18 @@ router.get('/tenants', asyncH(async (req, res) => {
 }));
 
 router.post('/tenants', asyncH(async (req, res) => {
-  const { name, slug, plan, max_shops, max_ai_calls_per_month } = req.body || {};
+  const { name, slug, plan, max_shops, max_ai_calls_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email } = req.body || {};
   if (!name) return res.status(400).json({ error: '租户名称不能为空' });
   if (slug) {
     const dup = await repos.adapter.get('SELECT id FROM tenants WHERE slug=?', [slug]);
     if (dup) return res.status(409).json({ error: 'slug 已存在' });
   }
   const info = await repos.adapter.run(
-    'INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month) VALUES (?,?,?,?,?,?)',
-    [name, slug || null, 'active', plan || 'trial', max_shops ?? 50, max_ai_calls_per_month ?? 100000]
+    `INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [name, slug || null, 'active', plan || 'trial', max_shops ?? 50, max_ai_calls_per_month ?? 100000,
+      billing_cycle || 'monthly', Number(price_per_month) || 0, Number(max_cost_per_month) || 0,
+      trial_ends_at || null, contact_name || null, contact_email || null]
   );
   await audit(info.lastInsertRowid, req.user.id, 'tenant_create', 'tenant', info.lastInsertRowid, { name });
   res.status(201).json({ tenant: await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [info.lastInsertRowid]) });
@@ -43,15 +47,66 @@ router.post('/tenants', asyncH(async (req, res) => {
 router.patch('/tenants/:id', asyncH(async (req, res) => {
   const tenant = await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [req.params.id]);
   if (!tenant) return res.status(404).json({ error: '租户不存在' });
-  const { status, plan, max_shops, max_ai_calls_per_month } = req.body || {};
-  if (status && !['active', 'suspended'].includes(status)) return res.status(400).json({ error: '无效状态' });
+  const b = req.body || {};
+  if (b.status && !['active', 'suspended'].includes(b.status)) return res.status(400).json({ error: '无效状态' });
   const now = nowExpr(repos.adapter.dialect);
+  const pick = (k, fallback) => (b[k] !== undefined ? b[k] : fallback);
+  const next = {
+    status: pick('status', tenant.status),
+    plan: pick('plan', tenant.plan),
+    max_shops: pick('max_shops', tenant.max_shops),
+    max_ai_calls_per_month: pick('max_ai_calls_per_month', tenant.max_ai_calls_per_month),
+    billing_cycle: pick('billing_cycle', tenant.billing_cycle),
+    price_per_month: Number(pick('price_per_month', tenant.price_per_month)) || 0,
+    max_cost_per_month: Number(pick('max_cost_per_month', tenant.max_cost_per_month)) || 0,
+    trial_ends_at: pick('trial_ends_at', tenant.trial_ends_at) || null,
+    contact_name: pick('contact_name', tenant.contact_name) || null,
+    contact_email: pick('contact_email', tenant.contact_email) || null
+  };
   await repos.adapter.run(
-    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, updated_at=${now} WHERE id=?`,
-    [status ?? tenant.status, plan ?? tenant.plan, max_shops ?? tenant.max_shops, max_ai_calls_per_month ?? tenant.max_ai_calls_per_month, tenant.id]
+    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, billing_cycle=?, price_per_month=?, max_cost_per_month=?, trial_ends_at=?, contact_name=?, contact_email=?, updated_at=${now} WHERE id=?`,
+    [next.status, next.plan, next.max_shops, next.max_ai_calls_per_month, next.billing_cycle, next.price_per_month, next.max_cost_per_month, next.trial_ends_at, next.contact_name, next.contact_email, tenant.id]
   );
-  await audit(tenant.id, req.user.id, 'tenant_update', 'tenant', tenant.id, { status, plan, max_shops, max_ai_calls_per_month });
+  await audit(tenant.id, req.user.id, 'tenant_update', 'tenant', tenant.id, next);
   res.json({ tenant: await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [tenant.id]) });
+}));
+
+// 平台总览：租户/店铺/用户规模 + 当月 AI 用量 + MRR（按活跃租户月费估算）
+router.get('/overview', asyncH(async (req, res) => {
+  const tenants = await repos.adapter.all('SELECT id, status, plan, price_per_month FROM tenants');
+  const totalShops = Number((await repos.adapter.get('SELECT COUNT(*) AS c FROM shops')).c);
+  const totalUsers = Number((await repos.adapter.get('SELECT COUNT(*) AS c FROM users')).c);
+  const month = monthKey();
+  const usage = (await repos.adapter.get('SELECT COUNT(*) AS calls, COALESCE(SUM(cost),0) AS cost FROM ai_usage WHERE created_at LIKE ?', [month + '%'])) || {};
+  const active = tenants.filter(t => t.status === 'active');
+  const mrr = active.reduce((s, t) => s + (Number(t.price_per_month) || 0), 0);
+  res.json({
+    tenants: { total: tenants.length, active: active.length, suspended: tenants.length - active.length },
+    shops: totalShops,
+    users: totalUsers,
+    month,
+    ai: { calls: Number(usage.calls || 0), cost: Math.round(Number(usage.cost || 0) * 10000) / 10000 },
+    mrr: Math.round(mrr * 100) / 100
+  });
+}));
+
+// 租户用量与计费：当月 AI 调用/tokens/成本 + 配额使用 + 计费信息
+router.get('/tenants/:id/usage', asyncH(async (req, res) => {
+  const tenantId = Number(req.params.id);
+  const tenant = await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [tenantId]);
+  if (!tenant) return res.status(404).json({ error: '租户不存在' });
+  const month = req.query.month || monthKey();
+  const usage = await getTenantUsage(tenantId, month);
+  const limits = await getTenantLimits(tenantId);
+  const shops = Number((await repos.adapter.get('SELECT COUNT(*) AS c FROM shops WHERE tenant_id=?', [tenantId])).c);
+  res.json({
+    tenant_id: tenantId,
+    month,
+    usage,
+    limits: { max_shops: limits.maxShops, max_ai_calls_per_month: limits.maxAiCalls, max_cost_per_month: limits.maxCost },
+    used: { shops, ai_calls: usage.ai.calls, ai_cost: usage.ai.cost },
+    billing: { cycle: tenant.billing_cycle, price_per_month: Number(tenant.price_per_month) || 0, trial_ends_at: tenant.trial_ends_at || null }
+  });
 }));
 
 // 为租户创建初始用户（管理员/成员）
@@ -102,6 +157,15 @@ router.get('/tenants/:id/audit-logs', asyncH(async (req, res) => {
   const limit = Math.min(200, Number(req.query.limit) || 50);
   const logs = await repos.adapter.all('SELECT * FROM audit_logs WHERE tenant_id=? ORDER BY created_at DESC LIMIT ?', [Number(req.params.id), limit]);
   res.json({ logs });
+}));
+
+// 租户用户列表（供超管代登录）
+router.get('/tenants/:id/users', asyncH(async (req, res) => {
+  const tenantId = Number(req.params.id);
+  const tenant = await repos.adapter.get('SELECT id FROM tenants WHERE id=?', [tenantId]);
+  if (!tenant) return res.status(404).json({ error: '租户不存在' });
+  const users = await repos.adapter.all('SELECT id, username, email, role, created_at FROM users WHERE tenant_id=? ORDER BY id', [tenantId]);
+  res.json({ users });
 }));
 
 // ========== 代登录（只读，15 分钟）==========

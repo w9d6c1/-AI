@@ -2,7 +2,7 @@
 const express = require('express');
 const { repos } = require('../repositories');
 const { requireTenant } = require('../repositories/tenant-context');
-const { enforceAiQuota } = require('../quota');
+const { enforceAiQuota, enforceCostQuota } = require('../quota');
 const { authRequired, asyncH } = require('../middleware');
 const { runAgent } = require('../inference');
 const { getAgentCatalog } = require('../agent-prompts');
@@ -101,6 +101,7 @@ router.post('/agents/:id/run', asyncH(async (req, res) => {
   if (!input || !String(input).trim()) return res.status(400).json({ error: '请输入分析对象' });
 
   await enforceAiQuota(t);
+  await enforceCostQuota(t);
 
   // 调用推理层执行
   const result = await runAgent(id, String(input).trim(), {

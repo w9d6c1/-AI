@@ -457,6 +457,14 @@ input, textarea, select { font-family:inherit; outline:none; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         安全中心
       </div>
+      <div class="nav-item" data-route="admin-overview" data-superadmin="true" onclick="navigate('admin-overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+        平台总览
+      </div>
+      <div class="nav-item" data-route="admin-tenants" data-superadmin="true" onclick="navigate('admin-tenants')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>
+        租户运营
+      </div>
       <div class="nav-item" data-route="retention" data-superadmin="true" onclick="navigate('retention')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
         数据保留
@@ -1715,6 +1723,44 @@ input, textarea, select { font-family:inherit; outline:none; }
         </div>
       </div>
 
+      <!-- ===== 平台总览（超管）===== -->
+      <div class="view" id="view-admin-overview">
+        <div class="flex-between mb-16">
+          <div style="font-size:13px;color:var(--text-secondary);">平台级运营指标（覆盖所有租户）。</div>
+          <button class="btn btn-outline btn-sm" onclick="loadAdminOverview()">刷新</button>
+        </div>
+        <div class="grid grid-4 mb-16" id="admin-overview-metrics"></div>
+        <div class="card">
+          <div class="card-title">租户规模</div>
+          <div id="admin-overview-tenants" style="margin-top:12px;font-size:13px;color:var(--text-secondary);"></div>
+        </div>
+      </div>
+
+      <!-- ===== 租户运营（超管）===== -->
+      <div class="view" id="view-admin-tenants">
+        <div class="flex-between mb-16">
+          <div style="font-size:13px;color:var(--text-secondary);">租户开通 / 停用 / 配额 / 计费 / 用量 / 代登录。</div>
+          <div class="flex gap-8">
+            <button class="btn btn-primary btn-sm" onclick="showTenantForm()">新建租户</button>
+            <button class="btn btn-outline btn-sm" onclick="loadAdminTenants()">刷新</button>
+          </div>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">ID</th><th style="padding:8px;">名称</th><th style="padding:8px;">slug</th>
+                <th style="padding:8px;">状态</th><th style="padding:8px;">套餐</th>
+                <th style="padding:8px;">店铺上限</th><th style="padding:8px;">AI 调用上限</th>
+                <th style="padding:8px;">成本上限</th><th style="padding:8px;">月费</th><th style="padding:8px;">到期</th>
+                <th style="padding:8px;">操作</th>
+              </tr></thead>
+              <tbody id="admin-tenants-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div id="modal-batch" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
         <div style="background:#fff;border-radius:12px;padding:24px;width:520px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
           <div class="flex-between mb-16">
@@ -1874,6 +1920,7 @@ input, textarea, select { font-family:inherit; outline:none; }
 <script src="/js/stage8-kb.js"></script>
 <script src="/js/stage8-reports.js"></script>
 <script src="/js/stage8-admin.js"></script>
+<script src="/js/stage9-admin.js"></script>
 <script>
 // ===== 智营AI 前端应用逻辑（连接真实后端 API）=====
 
@@ -1985,9 +2032,12 @@ const PAGE_TITLES = {
   'agent-runs': '智能体运行历史',
   usage: '用量统计',
   security: '安全中心',
-  retention: '数据保留'
+  retention: '数据保留',
+  'admin-overview': '平台总览',
+  'admin-tenants': '租户运营'
 };
 const ADMIN_ROUTES = new Set(['stores-scheduler', 'stores-alerts', 'stores-batch', 'stores-audit', 'stores-users', 'stores-import']);
+const SUPERADMIN_ROUTES = new Set(['retention', 'admin-overview', 'admin-tenants']);
 function isAdminUser() {
   return ['boss', 'admin'].includes(state.currentUser?.role);
 }
@@ -2078,7 +2128,7 @@ function navigate(route) {
     showToast('该模块仅管理员可用', 'warn');
     route = 'dashboard';
   }
-  if (route === 'retention' && !isSuperAdmin()) {
+  if (SUPERADMIN_ROUTES.has(route) && !isSuperAdmin()) {
     showToast('该模块仅平台超管可用', 'warn');
     route = 'dashboard';
   }
@@ -2113,6 +2163,8 @@ function navigate(route) {
   if (route === 'usage') initUsage();
   if (route === 'security') loadSecurity();
   if (route === 'retention') initRetention();
+  if (route === 'admin-overview') initAdminOverview();
+  if (route === 'admin-tenants') initAdminTenants();
 }
 window.addEventListener('hashchange', () => {
   const h = location.hash.replace('#', '');

@@ -35,6 +35,12 @@ CREATE TABLE IF NOT EXISTS tenants (
   plan TEXT DEFAULT 'trial',
   max_shops INTEGER DEFAULT 50,
   max_ai_calls_per_month INTEGER DEFAULT 100000,
+  billing_cycle TEXT DEFAULT 'monthly',
+  price_per_month REAL DEFAULT 0,
+  max_cost_per_month REAL DEFAULT 0,
+  trial_ends_at TEXT,
+  contact_name TEXT,
+  contact_email TEXT,
   created_at TEXT DEFAULT (datetime('now','localtime')),
   updated_at TEXT DEFAULT (datetime('now','localtime'))
 );
