@@ -457,6 +457,10 @@ input, textarea, select { font-family:inherit; outline:none; }
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         安全中心
       </div>
+      <div class="nav-item" data-route="retention" data-superadmin="true" onclick="navigate('retention')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        数据保留
+      </div>
     </nav>
     <div class="sidebar-footer">
       <div class="team-switch">
@@ -836,6 +840,13 @@ input, textarea, select { font-family:inherit; outline:none; }
               <div style="font-size:12.5px;color:var(--text-secondary);" id="kb-docs-list">
                 <div style="color:var(--text-muted);text-align:center;padding:8px 0;">暂无文档，上传后 AI 可引用学习</div>
               </div>
+              <div class="mt-16" style="border-top:1px solid var(--border);padding-top:12px;">
+                <div class="flex gap-8">
+                  <input id="kb-query" placeholder="检索知识库内容..." style="flex:1;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;" onkeydown="if(event.key==='Enter'){runKbSearch();}">
+                  <button class="btn btn-primary btn-sm" onclick="runKbSearch()">检索</button>
+                </div>
+                <div id="kb-search-results" style="margin-top:10px;font-size:12.5px;"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -1004,26 +1015,58 @@ input, textarea, select { font-family:inherit; outline:none; }
 
       <!-- ===== 执行监控 ===== -->
       <div class="view" id="view-stores-executions">
-        <div class="flex-between mb-16">
-          <select id="exec-status-filter" onchange="loadExecutions()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
-            <option value="">全部状态</option>
-            <option value="queued">排队中</option>
-            <option value="success">成功</option>
-            <option value="failed">失败</option>
-          </select>
-          <button class="btn btn-outline btn-sm" onclick="loadExecutions()">刷新</button>
+        <div class="card mb-16">
+          <div class="flex gap-12" style="flex-wrap:wrap;align-items:center;">
+            <select id="exec-status-filter" onchange="execResetPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+              <option value="">全部状态</option>
+              <option value="pending_manual">待人工执行</option>
+              <option value="pending_approval">待审批</option>
+              <option value="queued">排队中</option>
+              <option value="running">执行中</option>
+              <option value="success">成功</option>
+              <option value="failed">失败</option>
+            </select>
+            <select id="exec-shop" onchange="execResetPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;"></select>
+            <select id="exec-auto" onchange="execResetPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+              <option value="">全部来源</option>
+              <option value="true">自动执行</option>
+              <option value="false">人工执行</option>
+            </select>
+            <input type="date" id="exec-start" onchange="execResetPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+            <span>~</span>
+            <input type="date" id="exec-end" onchange="execResetPage()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+            <button class="btn btn-outline btn-sm" onclick="execResetPage()">查询</button>
+          </div>
+          <div class="flex gap-8 mt-16" style="flex-wrap:wrap;align-items:center;">
+            <select id="exec-export-format" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;">
+              <option value="csv">CSV</option>
+              <option value="xls">Excel</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="exportExecutions()">导出待执行清单</button>
+            <input type="file" id="exec-backfill-file" accept=".csv" style="display:none;" onchange="submitExecBackfill(this)">
+            <button class="btn btn-primary btn-sm" onclick="$('exec-backfill-file').click()">批量回填</button>
+          </div>
         </div>
         <div class="card">
           <div style="overflow-x:auto;">
             <table style="width:100%;border-collapse:collapse;font-size:13px;">
               <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
                 <th style="padding:8px;">ID</th><th style="padding:8px;">店铺</th>
-                <th style="padding:8px;">计划ID</th><th style="padding:8px;">操作</th>
-                <th style="padding:8px;">状态</th><th style="padding:8px;">截图</th>
-                <th style="padding:8px;">时间</th>
+                <th style="padding:8px;">计划ID</th><th style="padding:8px;">动作</th>
+                <th style="padding:8px;">期望</th><th style="padding:8px;">实际</th>
+                <th style="padding:8px;">来源</th><th style="padding:8px;">状态</th>
+                <th style="padding:8px;">截图</th><th style="padding:8px;">时间</th>
+                <th style="padding:8px;">操作</th>
               </tr></thead>
               <tbody id="exec-tbody"></tbody>
             </table>
+          </div>
+          <div class="flex-between mt-16">
+            <span id="exec-page-info" style="font-size:12px;color:var(--text-muted);"></span>
+            <div class="flex gap-8">
+              <button class="btn btn-outline btn-sm" onclick="execPage(-1)">上一页</button>
+              <button class="btn btn-outline btn-sm" onclick="execPage(1)">下一页</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1392,6 +1435,27 @@ input, textarea, select { font-family:inherit; outline:none; }
             </table>
           </div>
         </div>
+
+        <!-- 报表模板 -->
+        <div class="card mt-16">
+          <div class="flex-between mb-16">
+            <div class="card-title" style="margin:0;">报表模板</div>
+            <div class="flex gap-8">
+              <button class="btn btn-primary btn-sm" onclick="showCreateTemplateForm()">新建模板</button>
+              <button class="btn btn-outline btn-sm" onclick="loadReportTemplates()">刷新</button>
+            </div>
+          </div>
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">名称</th><th style="padding:8px;">类型</th>
+                <th style="padding:8px;">默认</th><th style="padding:8px;">创建时间</th>
+                <th style="padding:8px;">操作</th>
+              </tr></thead>
+              <tbody id="report-templates-list"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- ===== 审计日志 ===== -->
@@ -1614,6 +1678,29 @@ input, textarea, select { font-family:inherit; outline:none; }
         </div>
       </div>
 
+      <!-- ===== 数据保留策略 ===== -->
+      <div class="view" id="view-retention">
+        <div class="flex-between mb-16">
+          <div style="font-size:13px;color:var(--text-secondary);">按保留天数清理审计日志、通知、任务日志、智能体运行与预警记录（仅管理员）。</div>
+          <div class="flex gap-8">
+            <button class="btn btn-outline btn-sm" onclick="loadRetentionPolicy()">刷新</button>
+            <button class="btn btn-primary btn-sm" onclick="runRetention()">立即执行清理</button>
+          </div>
+        </div>
+        <div class="card">
+          <div style="overflow-x:auto;">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+              <thead><tr style="border-bottom:2px solid var(--border);text-align:left;">
+                <th style="padding:8px;">数据表</th><th style="padding:8px;">时间列</th>
+                <th style="padding:8px;">保留天数</th><th style="padding:8px;">配置项</th>
+              </tr></thead>
+              <tbody id="retention-tbody"></tbody>
+            </table>
+          </div>
+          <div id="retention-summary" style="margin-top:12px;font-size:12.5px;color:var(--text-secondary);"></div>
+        </div>
+      </div>
+
       <div id="modal-batch" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:1000;justify-content:center;align-items:center;">
         <div style="background:#fff;border-radius:12px;padding:24px;width:520px;max-width:90vw;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
           <div class="flex-between mb-16">
@@ -1765,6 +1852,10 @@ input, textarea, select { font-family:inherit; outline:none; }
 <script src="/js/stage8-runs.js"></script>
 <script src="/js/stage8-usage.js"></script>
 <script src="/js/stage8-security.js"></script>
+<script src="/js/stage8-executions.js"></script>
+<script src="/js/stage8-kb.js"></script>
+<script src="/js/stage8-reports.js"></script>
+<script src="/js/stage8-admin.js"></script>
 <script>
 // ===== 智营AI 前端应用逻辑（连接真实后端 API）=====
 
@@ -1875,16 +1966,23 @@ const PAGE_TITLES = {
   'stores-reconcile': '执行对账',
   'agent-runs': '智能体运行历史',
   usage: '用量统计',
-  security: '安全中心'
+  security: '安全中心',
+  retention: '数据保留'
 };
 const ADMIN_ROUTES = new Set(['stores-scheduler', 'stores-alerts', 'stores-batch', 'stores-audit', 'stores-users', 'stores-import']);
 function isAdminUser() {
   return ['boss', 'admin'].includes(state.currentUser?.role);
 }
+function isSuperAdmin() {
+  return state.currentUser?.role === 'superadmin';
+}
 function applyRoleUI() {
   const admin = isAdminUser();
   document.querySelectorAll('.nav-item').forEach(el => {
     if (ADMIN_ROUTES.has(el.dataset.route)) el.style.display = admin ? '' : 'none';
+  });
+  document.querySelectorAll('[data-superadmin]').forEach(el => {
+    el.style.display = isSuperAdmin() ? '' : 'none';
   });
   const label = $('current-user-label');
   if (label && state.currentUser) {
@@ -1962,6 +2060,10 @@ function navigate(route) {
     showToast('该模块仅管理员可用', 'warn');
     route = 'dashboard';
   }
+  if (route === 'retention' && !isSuperAdmin()) {
+    showToast('该模块仅平台超管可用', 'warn');
+    route = 'dashboard';
+  }
   state.currentRoute = route;
   document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.route === route));
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -1978,7 +2080,7 @@ function navigate(route) {
   if (route === 'learning') loadCourses();
   if (route === 'stores-dashboard') loadStoresDashboard();
   if (route === 'stores-suggestions') loadSuggestions();
-  if (route === 'stores-executions') loadExecutions();
+  if (route === 'stores-executions') initExecutions();
   if (route === 'stores-shops') loadShops();
   if (route === 'stores-scheduler') loadSchedules();
   if (route === 'stores-alerts') loadAlerts();
@@ -1992,6 +2094,7 @@ function navigate(route) {
   if (route === 'agent-runs') loadAgentRuns();
   if (route === 'usage') initUsage();
   if (route === 'security') loadSecurity();
+  if (route === 'retention') initRetention();
 }
 window.addEventListener('hashchange', () => {
   const h = location.hash.replace('#', '');
@@ -3164,24 +3267,6 @@ async function generateSuggestions() {
     showToast(data.message || '建议生成完成', 'success');
     loadSuggestions();
   } catch (e) { showToast('生成失败: ' + e.message, 'error'); }
-}
-
-async function loadExecutions() {
-  const status = $('exec-status-filter') ? $('exec-status-filter').value : '';
-  try {
-    const data = await API.get('/stores/executions' + (status ? '?status=' + status : ''));
-    const tbody = $('exec-tbody');
-    const statusColors = { queued: 'tag-primary', running: 'tag-warning', success: 'tag-success', failed: 'tag-danger' };
-    tbody.innerHTML = (data.executions || []).map(e => `<tr style="border-bottom:1px solid var(--border);">
-      <td style="padding:8px;">${e.id}</td>
-      <td style="padding:8px;">${esc(e.shop_name || '店铺#' + e.shop_id)}</td>
-      <td style="padding:8px;">${esc(e.target_campaign_id)}</td>
-      <td style="padding:8px;">${e.action_type}</td>
-      <td style="padding:8px;"><span class="tag ${statusColors[e.status] || ''}">${e.status}</span></td>
-      <td style="padding:8px;">${e.screenshot_url ? `<a href="${esc(e.screenshot_url)}" target="_blank" style="color:var(--primary);">查看截图</a>` : '-'}</td>
-      <td style="padding:8px;font-size:12px;">${e.created_at || '-'}</td>
-    </tr>`).join('') || '<tr><td colspan="7" style="padding:16px;text-align:center;color:var(--text-muted);">暂无执行记录</td></tr>';
-  } catch (e) { showToast('加载失败: ' + e.message, 'error'); }
 }
 
 async function loadShops() {
