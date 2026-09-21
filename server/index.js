@@ -58,6 +58,11 @@ app.use((req, res, next) => {
   res.setHeader('X-Frame-Options', 'SAMEORIGIN');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('X-XSS-Protection', '0');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  // 仅在启用 HTTPS 时下发 HSTS（避免本地 HTTP 被浏览器强制升级）
+  if (process.env.ENABLE_HSTS === 'true') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
   next();
 });
 

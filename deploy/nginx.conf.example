@@ -1,16 +1,52 @@
+# ===== Nginx 反向代理 + HTTPS 示例（域名替换 ai.example.com）=====
+# 证书：推荐 certbot（Let's Encrypt）
+#   sudo certbot --nginx -d ai.example.com        # 自动申请并注入证书路径
+#   或先手动签发后指向 /etc/letsencrypt/live/<域名>/
+# 应用监听 127.0.0.1:3200（见 .env 的 HOST_PORT）；务必只暴露本机，勿直接对外。
+
+# --- HTTP：仅用于 ACME 校验与跳转 HTTPS ---
 server {
     listen 80;
+    listen [::]:80;
     server_name ai.example.com;
-    return 301 https://$host$request_uri;
+
+    # certbot webroot 校验（如用 --nginx 插件可省略）
+    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+
+    location / { return 301 https://$host$request_uri; }
 }
 
+# --- HTTPS ---
 server {
-    listen 443 ssl http2;
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
     server_name ai.example.com;
 
-    ssl_certificate /etc/letsencrypt/live/ai.example.com/fullchain.pem;
+    ssl_certificate     /etc/letsencrypt/live/ai.example.com/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/ai.example.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers HIGH:!aNULL:!MD5;
+    ssl_prefer_server_ciphers on;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    # 安全响应头（应用层也会补一部分；边缘再加一层）
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # 上传/CSV 导入上限（与后端 50MB 上限匹配，留余量）
     client_max_body_size 60m;
+
+    # 压缩
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml image/svg+xml;
+    gzip_min_length 1024;
+
+    # 访问日志（按需）
+    # access_log /var/log/nginx/ecom-ai.access.log;
 
     location / {
         proxy_pass http://127.0.0.1:3200;
@@ -19,6 +55,11 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 180s;
+        proxy_set_header X-Forwarded-Host $host;
+        # AI 生成/长任务：放宽读超时
+        proxy_connect_timeout 10s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_buffering off;
     }
 }
