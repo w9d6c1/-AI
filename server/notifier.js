@@ -53,4 +53,12 @@ async function resendNotifications(alertId) {
   await sendNotifications(alertId);
 }
 
-module.exports = { sendNotifications, resendNotifications, buildWebhookPayload };
+// 通用消息发送（发票/通知等）：用合成 email 渠道指定收件人，复用 SMTP 配置
+async function sendMessage(tenantId, { to, subject, text } = {}) {
+  if (!to) throw Object.assign(new Error('未配置收件邮箱'), { status: 400 });
+  const channel = { channel_type: 'email', email_to: to };
+  await notify.send(channel, { title: subject, text });
+  return { sent: true, to, tenant_id: Number(tenantId) };
+}
+
+module.exports = { sendNotifications, resendNotifications, buildWebhookPayload, sendMessage };

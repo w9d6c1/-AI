@@ -27,17 +27,17 @@ router.get('/tenants', asyncH(async (req, res) => {
 }));
 
 router.post('/tenants', asyncH(async (req, res) => {
-  const { name, slug, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email } = req.body || {};
+  const { name, slug, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, tax_rate, trial_ends_at, contact_name, contact_email } = req.body || {};
   if (!name) return res.status(400).json({ error: '租户名称不能为空' });
   if (slug) {
     const dup = await repos.adapter.get('SELECT id FROM tenants WHERE slug=?', [slug]);
     if (dup) return res.status(409).json({ error: 'slug 已存在' });
   }
   const info = await repos.adapter.run(
-    `INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, tax_rate, trial_ends_at, contact_name, contact_email)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     [name, slug || null, 'active', plan || 'trial', max_shops ?? 50, max_ai_calls_per_month ?? 100000, Number(max_tokens_per_month) || 0,
-      billing_cycle || 'monthly', Number(price_per_month) || 0, Number(max_cost_per_month) || 0,
+      billing_cycle || 'monthly', Number(price_per_month) || 0, Number(max_cost_per_month) || 0, Number(tax_rate) || 0,
       trial_ends_at || null, contact_name || null, contact_email || null]
   );
   await audit(info.lastInsertRowid, req.user.id, 'tenant_create', 'tenant', info.lastInsertRowid, { name });
@@ -60,13 +60,14 @@ router.patch('/tenants/:id', asyncH(async (req, res) => {
     billing_cycle: pick('billing_cycle', tenant.billing_cycle),
     price_per_month: Number(pick('price_per_month', tenant.price_per_month)) || 0,
     max_cost_per_month: Number(pick('max_cost_per_month', tenant.max_cost_per_month)) || 0,
+    tax_rate: Number(pick('tax_rate', tenant.tax_rate)) || 0,
     trial_ends_at: pick('trial_ends_at', tenant.trial_ends_at) || null,
     contact_name: pick('contact_name', tenant.contact_name) || null,
     contact_email: pick('contact_email', tenant.contact_email) || null
   };
   await repos.adapter.run(
-    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, max_tokens_per_month=?, billing_cycle=?, price_per_month=?, max_cost_per_month=?, trial_ends_at=?, contact_name=?, contact_email=?, updated_at=${now} WHERE id=?`,
-    [next.status, next.plan, next.max_shops, next.max_ai_calls_per_month, next.max_tokens_per_month, next.billing_cycle, next.price_per_month, next.max_cost_per_month, next.trial_ends_at, next.contact_name, next.contact_email, tenant.id]
+    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, max_tokens_per_month=?, billing_cycle=?, price_per_month=?, max_cost_per_month=?, tax_rate=?, trial_ends_at=?, contact_name=?, contact_email=?, updated_at=${now} WHERE id=?`,
+    [next.status, next.plan, next.max_shops, next.max_ai_calls_per_month, next.max_tokens_per_month, next.billing_cycle, next.price_per_month, next.max_cost_per_month, next.tax_rate, next.trial_ends_at, next.contact_name, next.contact_email, tenant.id]
   );
   await audit(tenant.id, req.user.id, 'tenant_update', 'tenant', tenant.id, next);
   res.json({ tenant: await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [tenant.id]) });

@@ -12,7 +12,8 @@ const migrations = [
   require('./0008_stage5_execution_closure'),
   require('./0009_stage7_security'),
   require('./0010_stage9_billing'),
-  require('./0011_stage9_quota_tokens')
+  require('./0011_stage9_quota_tokens'),
+  require('./0012_stage9_invoicing')
 ];
 
 async function runMigrations(db) {

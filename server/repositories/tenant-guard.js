@@ -12,7 +12,7 @@ const TENANT_TABLES = new Set([
   'collection_schedules', 'schedule_runs', 'alert_rules', 'alerts', 'notification_channels',
   'notifications', 'batch_operations', 'batch_items', 'report_templates', 'report_records',
   'file_assets', 'import_batches', 'products', 'product_daily', 'orders_daily', 'refunds_daily',
-  'kb_chunks', 'ai_usage'
+  'kb_chunks', 'ai_usage', 'invoices', 'invoice_items', 'payments'
 ]);
 
 // 匹配 from/join/into/update 后的表名，以及紧随其后的逗号连接表（FROM a, b）

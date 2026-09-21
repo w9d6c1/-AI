@@ -8,6 +8,8 @@
 
 阶段 9（已完成）：多租户运营——迁移 `0010_stage9_billing` 为 `tenants` 增计费/联系人字段；`quota.js` 增成本配额（`ai_usage` 当月成本，接入智能体/对话/竞品/生图）与用量汇总；超管 API 增 `GET /admin/overview`、`/admin/tenants/:id/usage`、`/admin/tenants/:id/users`，租户 CRUD 扩计费字段；新增超管运营后台 UI（`public/js/stage9-admin.js` + 「平台总览 / 租户运营」视图，仅 superadmin 可见），含新建/编辑/停用、用量进度条、代登录。
 
+阶段 9 增量（已完成）：按 token 配额 + 配额阈值告警 + 代登录会话保留（`0011_stage9_quota_tokens`）；出账与发票（`0012_stage9_invoicing`：`invoices`/`invoice_items`/`payments` + `tenants.tax_rate`）——`server/billing.js` 出账/开票/作废/收款/逾期/汇总/CSV-Excel 导出/邮件发送，`routes/admin-billing.js` 超管 API，`stage9-billing.js`「账单发票」超管 UI（出账试算/正式、详情、开票/作废/收款/导出/发送），可选每月自动出账。
+
 上线前置（本轮已处理）：
 - `交接文档.md` 已脱敏（移除明文密钥），并轮换 `JWT_SECRET`、`RPA_CALLBACK_TOKEN`。
 - 登录页移除「演示账号 demo/123456」提示。
@@ -16,4 +18,4 @@
 
 上线前仍须人工完成：在 DeepSeek / 火山方舟控制台轮换 AI 密钥并写回 `.env`；配置正式域名与 HTTPS；在可用 Docker 守护进程的机器上构建镜像；使用真实店铺数据验证 AI 建议；完成一次异机备份恢复演练。多公司 SaaS 需要单独设计租户隔离，不能直接开放给外部商家。
 
-验证结果：`npm test`（SQLite）127 项，122 通过 / 5 跳过 / 0 失败（含 `test/stage8.test.js` 6 项、`test/stage8-ui.test.js` 5 项、`test/stage8-lists.test.js` 5 项、`test/stage9.test.js` 5 项、看板账号聚合 1 项）；JavaScript 语法检查通过；浏览器冒烟无控制台报错；开发库迁移 `0010_stage9_billing` 已应用；Compose 配置解析与 Docker 镜像构建通过，镜像未包含 `.env` 或本地数据库；备份恢复演练（`npm run drill`）通过。
+验证结果：`npm test`（SQLite）141 项，136 通过 / 5 跳过 / 0 失败（含 `test/stage8*.test.js`、`test/stage9.test.js` 6 项、`test/stage9-billing.test.js` 9 项、`test/security-scan.test.js` 4 项等）；JavaScript 语法检查通过；浏览器冒烟无控制台报错；开发库迁移至 `0012_stage9_invoicing`；Compose 配置解析与 Docker 镜像构建通过，镜像未包含 `.env` 或本地数据库；备份恢复演练（`npm run drill`）通过。

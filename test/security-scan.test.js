@@ -6,11 +6,16 @@ const os = require('os');
 
 const { scanText, scanRepo } = require('../scripts/scan-secrets');
 
+// 夹具运行时拼接，避免扫描器命中本文件自身（scanRepo 回归护栏）
+const FAKE_OPENAI = 'sk-' + 'abcdefghijklmnop1234';
+const FAKE_ARK = 'ark-' + '12345678-1234-1234-1234-1234567890ab';
+const FAKE_PEM = '-----BEGIN RSA ' + 'PRIVATE KEY-----';
+
 test('scanText：命中各类密钥模式', () => {
   const text = [
-    'const k = "sk-abcdefghijklmnop1234";',
-    'ark-12345678-1234-1234-1234-1234567890ab',
-    '-----BEGIN RSA PRIVATE KEY-----',
+    `const k = "${FAKE_OPENAI}";`,
+    FAKE_ARK,
+    FAKE_PEM,
     'AI_API_KEY=abcdefghij0123456789'
   ].join('\n');
   const findings = scanText(text);
@@ -35,7 +40,7 @@ test('scanText：不误报代码与环境变量插值', () => {
 test('scanRepo：能发现临时目录中植入的密钥', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'ecom-scan-'));
   try {
-    fs.writeFileSync(path.join(root, 'leak.txt'), 'AI_IMAGE_API_KEY=ark-12345678-1234-1234-1234-1234567890ab\n');
+    fs.writeFileSync(path.join(root, 'leak.txt'), 'AI_IMAGE_API_KEY=' + FAKE_ARK + '\n');
     const findings = scanRepo(root);
     assert.ok(findings.some(f => f.file === 'leak.txt'));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }

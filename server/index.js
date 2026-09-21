@@ -122,6 +122,7 @@ app.use('/api', require('./routes/alerts'));
 app.use('/api', require('./routes/batch'));
 app.use('/api', require('./routes/reports'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/admin', require('./routes/admin-billing'));
 
 // 数据看板：真实聚合（daily_reports / ad_campaigns / orders_daily / refunds_daily / product_daily）
 app.get('/api/dashboard/stats', authRequired, asyncH(async (req, res) => {

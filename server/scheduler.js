@@ -186,10 +186,35 @@ async function tick() {
         catch (e) { console.error(`[scheduler] 自动执行派发失败(租户 ${row.tenant_id}):`, e.message); }
       }
     }
+
+    // 自动出账：每月 1 日 02:00 后为上一自然月出账并开票（BILLING_AUTO_ISSUE=true）
+    await maybeAutoBilling(now, today);
   } finally {
     if (renewTimer) clearInterval(renewTimer);
     if (releaseLock) await releaseLock();
     running = false;
+  }
+}
+
+let lastAutoBillingDate = null;
+// 自动出账：每月 1 日 02:00 后，为上一自然月出账并开票（幂等：同周期已存在则跳过）
+async function maybeAutoBilling(now, today) {
+  if (String(process.env.BILLING_AUTO_ISSUE || 'false') !== 'true') return;
+  if (now.getDate() !== 1 || now.getHours() < 2) return;
+  if (lastAutoBillingDate === today) return;
+  lastAutoBillingDate = today;
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const y = prev.getFullYear();
+  const m = String(prev.getMonth() + 1).padStart(2, '0');
+  const lastDay = new Date(y, prev.getMonth() + 1, 0).getDate();
+  const periodStart = `${y}-${m}-01`;
+  const periodEnd = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+  try {
+    const billing = require('./billing');
+    const res = await billing.runBilling({ periodStart, periodEnd, dryRun: false, issue: true, createdBy: null });
+    console.log(`[scheduler] 自动出账 ${periodStart}~${periodEnd}：生成 ${res.created.length}，跳过 ${res.skipped.length}`);
+  } catch (e) {
+    console.error('[scheduler] 自动出账失败:', e.message);
   }
 }
 
