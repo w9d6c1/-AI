@@ -7,7 +7,7 @@ const { nowExpr } = require('../repositories/sql');
 const { runWithTenant } = require('../repositories/tenant-context');
 const { authRequired, asyncH, requireRole, signImpersonation } = require('../middleware');
 const { todayLocal, dateLocalOffset } = require('../util');
-const { getTenantUsage, getTenantLimits, monthKey } = require('../quota');
+const { getTenantUsage, getTenantLimits, quotaAlerts, monthKey } = require('../quota');
 
 const router = express.Router();
 router.use(authRequired);
@@ -27,16 +27,16 @@ router.get('/tenants', asyncH(async (req, res) => {
 }));
 
 router.post('/tenants', asyncH(async (req, res) => {
-  const { name, slug, plan, max_shops, max_ai_calls_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email } = req.body || {};
+  const { name, slug, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email } = req.body || {};
   if (!name) return res.status(400).json({ error: '租户名称不能为空' });
   if (slug) {
     const dup = await repos.adapter.get('SELECT id FROM tenants WHERE slug=?', [slug]);
     if (dup) return res.status(409).json({ error: 'slug 已存在' });
   }
   const info = await repos.adapter.run(
-    `INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [name, slug || null, 'active', plan || 'trial', max_shops ?? 50, max_ai_calls_per_month ?? 100000,
+    `INSERT INTO tenants (name, slug, status, plan, max_shops, max_ai_calls_per_month, max_tokens_per_month, billing_cycle, price_per_month, max_cost_per_month, trial_ends_at, contact_name, contact_email)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [name, slug || null, 'active', plan || 'trial', max_shops ?? 50, max_ai_calls_per_month ?? 100000, Number(max_tokens_per_month) || 0,
       billing_cycle || 'monthly', Number(price_per_month) || 0, Number(max_cost_per_month) || 0,
       trial_ends_at || null, contact_name || null, contact_email || null]
   );
@@ -56,6 +56,7 @@ router.patch('/tenants/:id', asyncH(async (req, res) => {
     plan: pick('plan', tenant.plan),
     max_shops: pick('max_shops', tenant.max_shops),
     max_ai_calls_per_month: pick('max_ai_calls_per_month', tenant.max_ai_calls_per_month),
+    max_tokens_per_month: Number(pick('max_tokens_per_month', tenant.max_tokens_per_month)) || 0,
     billing_cycle: pick('billing_cycle', tenant.billing_cycle),
     price_per_month: Number(pick('price_per_month', tenant.price_per_month)) || 0,
     max_cost_per_month: Number(pick('max_cost_per_month', tenant.max_cost_per_month)) || 0,
@@ -64,8 +65,8 @@ router.patch('/tenants/:id', asyncH(async (req, res) => {
     contact_email: pick('contact_email', tenant.contact_email) || null
   };
   await repos.adapter.run(
-    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, billing_cycle=?, price_per_month=?, max_cost_per_month=?, trial_ends_at=?, contact_name=?, contact_email=?, updated_at=${now} WHERE id=?`,
-    [next.status, next.plan, next.max_shops, next.max_ai_calls_per_month, next.billing_cycle, next.price_per_month, next.max_cost_per_month, next.trial_ends_at, next.contact_name, next.contact_email, tenant.id]
+    `UPDATE tenants SET status=?, plan=?, max_shops=?, max_ai_calls_per_month=?, max_tokens_per_month=?, billing_cycle=?, price_per_month=?, max_cost_per_month=?, trial_ends_at=?, contact_name=?, contact_email=?, updated_at=${now} WHERE id=?`,
+    [next.status, next.plan, next.max_shops, next.max_ai_calls_per_month, next.max_tokens_per_month, next.billing_cycle, next.price_per_month, next.max_cost_per_month, next.trial_ends_at, next.contact_name, next.contact_email, tenant.id]
   );
   await audit(tenant.id, req.user.id, 'tenant_update', 'tenant', tenant.id, next);
   res.json({ tenant: await repos.adapter.get('SELECT * FROM tenants WHERE id=?', [tenant.id]) });
@@ -99,12 +100,20 @@ router.get('/tenants/:id/usage', asyncH(async (req, res) => {
   const usage = await getTenantUsage(tenantId, month);
   const limits = await getTenantLimits(tenantId);
   const shops = Number((await repos.adapter.get('SELECT COUNT(*) AS c FROM shops WHERE tenant_id=?', [tenantId])).c);
+  const usedTokens = usage.ai.tokens_in + usage.ai.tokens_out;
+  const alerts = quotaAlerts([
+    { key: 'shops', label: '店铺数', used: shops, max: limits.maxShops },
+    { key: 'ai_calls', label: 'AI 调用', used: usage.ai.calls, max: limits.maxAiCalls },
+    { key: 'ai_tokens', label: 'AI tokens', used: usedTokens, max: limits.maxTokens },
+    { key: 'ai_cost', label: 'AI 成本', used: usage.ai.cost, max: limits.maxCost }
+  ]);
   res.json({
     tenant_id: tenantId,
     month,
     usage,
-    limits: { max_shops: limits.maxShops, max_ai_calls_per_month: limits.maxAiCalls, max_cost_per_month: limits.maxCost },
-    used: { shops, ai_calls: usage.ai.calls, ai_cost: usage.ai.cost },
+    limits: { max_shops: limits.maxShops, max_ai_calls_per_month: limits.maxAiCalls, max_tokens_per_month: limits.maxTokens, max_cost_per_month: limits.maxCost },
+    used: { shops, ai_calls: usage.ai.calls, ai_tokens: usedTokens, ai_cost: usage.ai.cost },
+    alerts,
     billing: { cycle: tenant.billing_cycle, price_per_month: Number(tenant.price_per_month) || 0, trial_ends_at: tenant.trial_ends_at || null }
   });
 }));

@@ -297,6 +297,12 @@ input, textarea, select { font-family:inherit; outline:none; }
 </head>
 <body>
 
+<!-- 代登录提示条（超管代登录中显示）-->
+<div id="impersonate-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:2000;align-items:center;justify-content:center;gap:12px;padding:8px 12px;background:#fef3c7;border-bottom:1px solid #fcd34d;font-size:13px;color:#92400e;">
+  <span>当前为<b>代登录（只读）</b>会话</span>
+  <button class="btn btn-outline btn-sm" onclick="exitImpersonation()">退出代登录</button>
+</div>
+
 <!-- ===== 登录页 ===== -->
 <div id="login-view">
   <div class="login-box">
@@ -1752,6 +1758,7 @@ input, textarea, select { font-family:inherit; outline:none; }
                 <th style="padding:8px;">ID</th><th style="padding:8px;">名称</th><th style="padding:8px;">slug</th>
                 <th style="padding:8px;">状态</th><th style="padding:8px;">套餐</th>
                 <th style="padding:8px;">店铺上限</th><th style="padding:8px;">AI 调用上限</th>
+                <th style="padding:8px;">token 上限</th>
                 <th style="padding:8px;">成本上限</th><th style="padding:8px;">月费</th><th style="padding:8px;">到期</th>
                 <th style="padding:8px;">操作</th>
               </tr></thead>

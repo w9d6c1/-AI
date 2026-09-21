@@ -23,8 +23,8 @@ const { runWithTenant } = require('../server/repositories/tenant-context');
 const { signToken } = require('../server/middleware');
 const { db } = require('../server/db');
 
-let server, base, superToken, adminToken, t2Token;
-let superId, adminId, tenant2, t2UserId;
+let server, base, superToken, adminToken, t2Token, t3Token;
+let superId, adminId, tenant2, t2UserId, tenant3, t3UserId;
 
 before(async () => {
   await runWithTenant(1, async () => {
@@ -51,6 +51,19 @@ before(async () => {
   await runWithTenant(tenant2, async () => {
     await defaultAdapter.run('INSERT INTO ai_usage (tenant_id,provider,capability,model,tokens_in,tokens_out,cost) VALUES (?,?,?,?,?,?,?)', [tenant2, 'local', 'chat', 'm1', 10, 20, 0.05]);
   });
+
+  // 建「token 配额租户」：成本不限，token 上限极小，并预置当月 tokens
+  const created3 = await (await req('/admin/tenants', 'POST', {
+    name: 'token配额租户', slug: 'token-tenant', plan: 'basic',
+    max_shops: 5, max_ai_calls_per_month: 1000, max_cost_per_month: 0, max_tokens_per_month: 5, price_per_month: 0
+  }, superToken)).json();
+  tenant3 = created3.tenant.id;
+  const u3 = await (await req('/admin/tenants/' + tenant3 + '/users', 'POST', { username: 'tok_user', password: 'Passw0rd!2345', role: 'admin' }, superToken)).json();
+  t3UserId = u3.id;
+  t3Token = await signToken({ id: t3UserId, tenant_id: tenant3, session_version: 0 });
+  await runWithTenant(tenant3, async () => {
+    await defaultAdapter.run('INSERT INTO ai_usage (tenant_id,provider,capability,model,tokens_in,tokens_out,cost) VALUES (?,?,?,?,?,?,?)', [tenant3, 'local', 'chat', 'm1', 3, 4, 0]);
+  });
 });
 
 after(async () => {
@@ -70,19 +83,21 @@ async function json(resp, status = 200) { assert.equal(resp.status, status, awai
 test('S9 租户开通：计费/配额字段落库并可更新', async () => {
   const created = await json(await req('/admin/tenants', 'POST', {
     name: '客户A', slug: 'customer-a', plan: 'pro',
-    max_shops: 10, max_ai_calls_per_month: 5000, max_cost_per_month: 100,
+    max_shops: 10, max_ai_calls_per_month: 5000, max_cost_per_month: 100, max_tokens_per_month: 2000000,
     price_per_month: 299, billing_cycle: 'monthly', trial_ends_at: '2026-12-31',
     contact_name: '张三', contact_email: 'a@example.com'
   }), 201);
   const id = created.tenant.id;
   assert.equal(created.tenant.max_cost_per_month, 100);
+  assert.equal(created.tenant.max_tokens_per_month, 2000000);
   assert.equal(created.tenant.price_per_month, 299);
   assert.equal(created.tenant.billing_cycle, 'monthly');
   assert.equal(created.tenant.contact_name, '张三');
 
-  const patched = await json(await req('/admin/tenants/' + id, 'PATCH', { status: 'suspended', max_cost_per_month: 50 }));
+  const patched = await json(await req('/admin/tenants/' + id, 'PATCH', { status: 'suspended', max_cost_per_month: 50, max_tokens_per_month: 1000000 }));
   assert.equal(patched.tenant.status, 'suspended');
   assert.equal(patched.tenant.max_cost_per_month, 50);
+  assert.equal(patched.tenant.max_tokens_per_month, 1000000);
 
   const list = await json(await req('/admin/tenants'));
   assert.ok(list.tenants.some(t => t.id === id && Number(t.price_per_month) === 299));
@@ -105,6 +120,9 @@ test('S9 租户用量与用户列表', async () => {
   assert.equal(u.limits.max_cost_per_month, 0.01);
   assert.equal(u.used.ai_cost, 0.05);
   assert.ok(u.billing && u.billing.cycle);
+  assert.equal(u.used.ai_tokens, 30);
+  assert.ok(Array.isArray(u.alerts));
+  assert.ok(u.alerts.some(a => a.key === 'ai_cost' && a.level === 'exceeded'));
 
   const users = await json(await req('/admin/tenants/' + tenant2 + '/users'));
   assert.ok(users.users.some(x => x.id === t2UserId && x.username === 'q_user'));
@@ -121,4 +139,14 @@ test('S9 成本配额：当月成本超限时拒绝 AI 调用', async () => {
   assert.equal(r.status, 429);
   const body = await r.json();
   assert.match(body.error, /成本额度/);
+});
+
+test('S9 token 配额：当月 tokens 超限时拒绝 AI 调用', async () => {
+  const r = await req('/agents/a1/run', 'POST', { input: '测试' }, t3Token);
+  assert.equal(r.status, 429);
+  const body = await r.json();
+  assert.match(body.error, /token 额度/);
+
+  const u = await json(await req('/admin/tenants/' + tenant3 + '/usage'));
+  assert.ok(u.alerts.some(a => a.key === 'ai_tokens' && a.level === 'exceeded'));
 });

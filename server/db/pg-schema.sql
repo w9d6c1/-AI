@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS tenants (
   plan TEXT DEFAULT 'trial',
   max_shops INTEGER DEFAULT 50,
   max_ai_calls_per_month INTEGER DEFAULT 100000,
+  max_tokens_per_month INTEGER DEFAULT 0,
   billing_cycle TEXT DEFAULT 'monthly',
   price_per_month DOUBLE PRECISION DEFAULT 0,
   max_cost_per_month DOUBLE PRECISION DEFAULT 0,

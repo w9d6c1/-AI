@@ -3,7 +3,7 @@ const express = require('express');
 const { repos } = require('../repositories');
 const { nowExpr } = require('../repositories/sql');
 const { requireTenant } = require('../repositories/tenant-context');
-const { enforceAiQuota, enforceCostQuota } = require('../quota');
+const { enforceAiQuota, enforceUsageQuota } = require('../quota');
 const { authRequired, asyncH } = require('../middleware');
 const { chatReply } = require('../ai');
 const kb = require('../kb');
@@ -55,7 +55,7 @@ router.post('/chats/:id/messages', asyncH(async (req, res) => {
   const history = (await repos.adapter.all('SELECT role, content FROM messages WHERE chat_id=? AND tenant_id=? ORDER BY id DESC LIMIT 8', [req.params.id, t])).reverse();
 
   await enforceAiQuota();
-  await enforceCostQuota();
+  await enforceUsageQuota();
   // RAG：按用户问题检索其知识库，注入对话上下文
   const chunks = await kb.search({ userId: req.user.id, query: text, topK: 4 });
   const knowledge = chunks.length ? chunks.map((c, i) => `[${i + 1}] ${c.content}`).join('\n\n') : '';

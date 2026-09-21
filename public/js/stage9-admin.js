@@ -36,11 +36,11 @@ async function initAdminTenants() { loadAdminTenants(); }
 async function loadAdminTenants() {
   const tb = $('admin-tenants-tbody');
   if (!tb) return;
-  tb.innerHTML = emptyState('加载中…', 11);
+  tb.innerHTML = emptyState('加载中…', 12);
   try {
     const data = await API.get('/admin/tenants');
     const list = data.tenants || [];
-    if (!list.length) { tb.innerHTML = emptyState('暂无租户', 11); return; }
+    if (!list.length) { tb.innerHTML = emptyState('暂无租户', 12); return; }
     tb.innerHTML = list.map(t => {
       const statusTag = t.status === 'active' ? '<span class="tag tag-success">活跃</span>' : '<span class="tag tag-danger">停用</span>';
       return `<tr style="border-bottom:1px solid var(--border);">
@@ -51,6 +51,7 @@ async function loadAdminTenants() {
         <td style="padding:8px;">${esc(t.plan || '—')}</td>
         <td style="padding:8px;">${t.max_shops ?? '—'}</td>
         <td style="padding:8px;">${fmtNum(t.max_ai_calls_per_month)}</td>
+        <td style="padding:8px;">${t.max_tokens_per_month ? fmtNum(t.max_tokens_per_month) : '不限'}</td>
         <td style="padding:8px;">${t.max_cost_per_month ? '¥' + t.max_cost_per_month : '不限'}</td>
         <td style="padding:8px;">¥${Number(t.price_per_month || 0).toLocaleString('zh-CN')}</td>
         <td style="padding:8px;font-size:12px;">${esc(t.trial_ends_at || '—')}</td>
@@ -61,7 +62,7 @@ async function loadAdminTenants() {
         </td>
       </tr>`;
     }).join('');
-  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 11); }
+  } catch (e) { tb.innerHTML = emptyState('加载失败：' + e.message, 12); }
 }
 
 async function showTenantForm(id) {
@@ -94,16 +95,17 @@ async function showTenantForm(id) {
       </div>
       <div style="display:flex;gap:10px;">
         <div style="flex:1;"><label style="font-size:12px;">成本上限/月（0=不限）</label><input id="ten-max-cost" type="number" step="0.01" value="${t ? (t.max_cost_per_month ?? 0) : 0}" style="${inp}"></div>
-        <div style="flex:1;"><label style="font-size:12px;">月费（¥）</label><input id="ten-price" type="number" step="0.01" value="${t ? (t.price_per_month ?? 0) : 0}" style="${inp}"></div>
+        <div style="flex:1;"><label style="font-size:12px;">token 上限/月（0=不限）</label><input id="ten-max-tokens" type="number" value="${t ? (t.max_tokens_per_month ?? 0) : 0}" style="${inp}"></div>
       </div>
       <div style="display:flex;gap:10px;">
+        <div style="flex:1;"><label style="font-size:12px;">月费（¥）</label><input id="ten-price" type="number" step="0.01" value="${t ? (t.price_per_month ?? 0) : 0}" style="${inp}"></div>
         <div style="flex:1;"><label style="font-size:12px;">计费周期</label>
           <select id="ten-cycle" style="${inp}">
             <option value="monthly"${!t || t.billing_cycle === 'monthly' ? ' selected' : ''}>月付</option>
             <option value="yearly"${t && t.billing_cycle === 'yearly' ? ' selected' : ''}>年付</option>
           </select></div>
-        <div style="flex:1;"><label style="font-size:12px;">试用到期</label><input id="ten-trial" type="date" value="${trialVal}" style="${inp}"></div>
       </div>
+      <div><label style="font-size:12px;">试用到期</label><input id="ten-trial" type="date" value="${trialVal}" style="${inp}"></div>
       <div style="display:flex;gap:10px;">
         <div style="flex:1;"><label style="font-size:12px;">联系人</label><input id="ten-contact" value="${t ? esc(t.contact_name || '') : ''}" style="${inp}"></div>
         <div style="flex:1;"><label style="font-size:12px;">联系邮箱</label><input id="ten-email" value="${t ? esc(t.contact_email || '') : ''}" style="${inp}"></div>
@@ -119,6 +121,7 @@ async function submitTenantForm(id) {
     plan: $('ten-plan').value,
     max_shops: Number($('ten-max-shops').value) || 0,
     max_ai_calls_per_month: Number($('ten-max-calls').value) || 0,
+    max_tokens_per_month: Number($('ten-max-tokens').value) || 0,
     max_cost_per_month: Number($('ten-max-cost').value) || 0,
     price_per_month: Number($('ten-price').value) || 0,
     billing_cycle: $('ten-cycle').value,
@@ -150,10 +153,15 @@ async function showTenantUsage(id) {
         ${pct !== null ? `<div style="height:6px;background:var(--border);border-radius:3px;margin-top:4px;"><div style="height:6px;width:${pct}%;background:${pct >= 90 ? '#ef4444' : '#0d9488'};border-radius:3px;"></div></div>` : ''}
       </div>`;
     };
+    const alerts = d.alerts || [];
+    const alertsHtml = alerts.length ? `<div style="margin:10px 0;padding:8px 10px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;font-size:12px;color:#9a3412;">
+      <b>配额告警</b><ul style="margin:4px 0 0 18px;">${alerts.map(a => `<li>${esc(a.label)} 已用 ${a.pct}%${a.level === 'exceeded' ? '（已超限）' : '（预警）'}</li>`).join('')}</ul></div>` : '';
     openGenericModal('租户用量 #' + id + '（' + esc(d.month) + '）', `
       ${bar('店铺', used.shops, l.max_shops, '')}
       ${bar('AI 调用', used.ai_calls, l.max_ai_calls_per_month, ' 次')}
+      ${bar('AI tokens', used.ai_tokens, l.max_tokens_per_month, '')}
       ${bar('AI 成本', used.ai_cost, l.max_cost_per_month, ' 元')}
+      ${alertsHtml}
       <div style="margin-top:10px;font-size:12px;color:var(--text-secondary);">
         本月 tokens：入 ${fmtNum(u.ai.tokens_in)} / 出 ${fmtNum(u.ai.tokens_out)} ｜ 智能体运行 ${fmtNum(u.agent_runs.runs)} 次
       </div>
@@ -186,9 +194,17 @@ async function showTenantUsers(id) {
 }
 
 function impersonateUser(userId) {
-  customConfirm('将以该用户身份进入（只读，15 分钟）。当前超管会话会被替换，需重新登录超管账号。确认？', '代登录', async () => {
+  customConfirm('将以该用户身份进入（只读，15 分钟）。超管会话会暂存，可随时「退出代登录」恢复。确认？', '代登录', async () => {
     try {
       const d = await API.post('/admin/users/' + userId + '/impersonate');
+      const prevToken = localStorage.getItem('zy_token');
+      const prevUser = localStorage.getItem('zy_user');
+      if (prevToken && prevUser && !localStorage.getItem('zy_super_session')) {
+        try {
+          const u = JSON.parse(prevUser);
+          if (u && u.role === 'superadmin') localStorage.setItem('zy_super_session', JSON.stringify({ token: prevToken, user: prevUser }));
+        } catch (_) { /* ignore */ }
+      }
       localStorage.setItem('zy_token', d.token);
       localStorage.setItem('zy_user', JSON.stringify({ id: d.user.id, username: d.user.username, role: 'member' }));
       showToast('已进入代登录（只读）', 'success');
@@ -196,3 +212,21 @@ function impersonateUser(userId) {
     } catch (e) { showToast(e.message, 'error'); }
   }, { icon: '👤' });
 }
+
+function exitImpersonation() {
+  const saved = localStorage.getItem('zy_super_session');
+  if (!saved) { showToast('未处于代登录状态', 'warn'); return; }
+  try {
+    const { token, user } = JSON.parse(saved);
+    localStorage.setItem('zy_token', token);
+    localStorage.setItem('zy_user', user);
+    localStorage.removeItem('zy_super_session');
+    showToast('已退出代登录，恢复超管会话', 'success');
+    setTimeout(() => location.reload(), 400);
+  } catch (e) { showToast('恢复会话失败：' + e.message, 'error'); }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const banner = $('impersonate-banner');
+  if (banner && localStorage.getItem('zy_super_session')) banner.style.display = 'flex';
+});
