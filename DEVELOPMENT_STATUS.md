@@ -12,7 +12,7 @@
 
 上线前置（本轮已处理）：
 - `交接文档.md` 已脱敏（移除明文密钥），并轮换 `JWT_SECRET`、`RPA_CALLBACK_TOKEN`。
-- 登录页移除「演示账号 demo/123456」提示。
+- 登录页移除演示账号提示。
 - 已 `git init` 并打 tag `v0.1.0`。
 - `AI_API_KEY` / `AI_IMAGE_API_KEY` 已从 `.env` 置空（历史值泄露）。
 

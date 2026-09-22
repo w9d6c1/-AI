@@ -32,7 +32,8 @@ const registry = require('../server/integrations/registry');
     } else {
       const t = Date.now();
       try {
-        const r = await registry.callImage('一只白色陶瓷杯，纯色背景', { size: '1024x1024' });
+        // Seedream 4.5 要求尺寸 ≥ 3,686,400 像素，用 2048x2048
+        const r = await registry.callImage('一只白色陶瓷杯，纯色背景', { size: '2048x2048' });
         console.log(`[check-ai] 生图 OK：provider=${r.provider} 张数=${r.values.length} ${Date.now() - t}ms`);
       } catch (e) {
         failed = true;
@@ -41,5 +42,9 @@ const registry = require('../server/integrations/registry');
     }
   }
 
-  process.exit(failed ? 1 : 0);
-})();
+  // 不用 process.exit：避免 Windows 下 undici 连接被强制关闭触发 libuv 断言
+  process.exitCode = failed ? 1 : 0;
+})().catch((e) => {
+  console.error('[check-ai] 异常:', e.message);
+  process.exitCode = 1;
+});
