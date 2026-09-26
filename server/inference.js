@@ -6,9 +6,11 @@ const { getAgentPrompt } = require('./agent-prompts');
 const { todayLocal, dateLocalOffset } = require('./util');
 const { requireTenant } = require('./repositories/tenant-context');
 const kb = require('./kb');
+const { outputContract, normalizeResult } = require('./agent-workbench');
+const { fallback } = require('./agent-fallbacks');
 
 // ========== 上下文构建器 ==========
-async function buildContext(agentId, input, userId) {
+async function buildContext(agentId, input, userId, options = {}) {
   const config = getAgentPrompt(agentId);
   if (!config || !config.needsStoreData) return '';
 
@@ -26,7 +28,9 @@ async function buildContext(agentId, input, userId) {
   if (!shopIds.length) return '\n\n（当前用户暂无可访问的店铺数据）';
 
   const placeholders = shopIds.map(() => '?').join(',');
-  const weekAgo = dateLocalOffset(-7);
+  const days = { '近7天': 7, '近30天': 30, '近90天': 90 }[options.period] || 7;
+  const weekAgo = dateLocalOffset(-(days - 1));
+  const periodLabel = `近${days}天`;
 
   const reports = await repos.adapter.all(
     `SELECT dr.*, s.shop_name FROM daily_reports dr
@@ -39,13 +43,14 @@ async function buildContext(agentId, input, userId) {
   if (reports.length) {
     const totalPay = reports.reduce((s, r) => s + (r.pay_amount || 0), 0);
     const totalVisitors = reports.reduce((s, r) => s + (r.visitors || 0), 0);
-    const totalConv = reports.length > 0 ? totalPay / (totalVisitors || 1) : 0;
-    parts.push(`【店铺经营数据（近7天）】
+    const totalBuyers = reports.reduce((s, r) => s + Number(r.payed_buyer_count || 0), 0);
+    const totalConv = totalVisitors > 0 ? totalBuyers / totalVisitors : 0;
+    parts.push(`【店铺经营数据（${periodLabel}）】
 - 店铺数：${shopIds.length}
 - 总支付金额：¥${totalPay.toFixed(2)}
 - 总访客数：${totalVisitors}
 - 整体转化率：${(totalConv * 100).toFixed(2)}%
-- 日均支付：¥${(totalPay / 7).toFixed(2)}`);
+- 日均支付：¥${(totalPay / days).toFixed(2)}`);
   }
 
   const campaigns = await repos.adapter.all(
@@ -63,7 +68,7 @@ async function buildContext(agentId, input, userId) {
     const lossCampaigns = campaigns.filter(c => c.cost > 100 && c.roi != null && c.roi < 1);
     const topCampaigns = campaigns.filter(c => c.roi != null && c.roi > 3).slice(0, 5);
 
-    parts.push(`【推广数据（近7天）】
+    parts.push(`【推广数据（${periodLabel}）】
 - 计划总数：${campaigns.length}
 - 总花费：¥${totalCost.toFixed(2)}
 - 总支付金额：¥${totalAdPay.toFixed(2)}
@@ -89,7 +94,7 @@ ${topCampaigns.map((c, i) => `${i + 1}. ${c.campaign_name} | 花费¥${c.cost.to
     [t, ...shopIds, weekAgo]
   );
   if (orders && (Number(orders.orders) > 0 || Number(orders.pay) > 0)) {
-    parts.push(`【订单数据（近7天）】
+    parts.push(`【订单数据（${periodLabel}）】
 - 支付订单数：${Number(orders.orders)}
 - 支付金额：¥${Number(orders.pay).toFixed(2)}
 - 退款订单数：${Number(orders.refund_orders)}
@@ -103,7 +108,7 @@ ${topCampaigns.map((c, i) => `${i + 1}. ${c.campaign_name} | 花费¥${c.cost.to
     [t, ...shopIds, weekAgo]
   );
   if (refunds && (Number(refunds.refund_count) > 0 || Number(refunds.refund_amount) > 0)) {
-    parts.push(`【退款数据（近7天）】
+    parts.push(`【退款数据（${periodLabel}）】
 - 退款笔数：${Number(refunds.refund_count)}
 - 退款金额：¥${Number(refunds.refund_amount).toFixed(2)}
 - 平均退款率：${(Number(refunds.refund_rate) * 100).toFixed(2)}%`);
@@ -118,7 +123,7 @@ ${topCampaigns.map((c, i) => `${i + 1}. ${c.campaign_name} | 花费¥${c.cost.to
     [t, ...shopIds, weekAgo]
   );
   if (topProducts.length) {
-    parts.push(`【商品TOP5（近7天，按成交额）】
+    parts.push(`【商品TOP5（${periodLabel}，按成交额）】
 ${topProducts.map((p, i) => `${i + 1}. ${p.title || p.product_id} | 成交¥${Number(p.pay).toFixed(0)} | 退款¥${Number(p.refund || 0).toFixed(0)}`).join('\n')}`);
   }
 
@@ -183,7 +188,8 @@ async function runAgent(agentId, input, options = {}) {
   const userId = options.userId || null;
   const extra = options.extra || '';
 
-  const dataContext = await buildContext(agentId, input, userId);
+  const params = options.params || {};
+  const dataContext = await buildContext(agentId, input, userId, params);
 
   // RAG：检索用户知识库并注入（P4-6）
   let knowledge = '';
@@ -195,12 +201,14 @@ async function runAgent(agentId, input, options = {}) {
   }
 
   let userContent = config.userTemplate
-    .replace('{{input}}', input)
-    .replace('{{extra}}', extra)
-    .replace('{{data}}', dataContext + (knowledge ? `\n\n【知识库参考】\n${knowledge}` : ''));
+    .replace('{{input}}', () => input)
+    .replace('{{extra}}', () => extra)
+    .replace('{{data}}', () => dataContext + (knowledge ? `\n\n【知识库参考】\n${knowledge}` : ''));
+  const { referenceImage, ...promptParams } = params;
+  userContent += `\n\n【用户参数】\n${JSON.stringify(promptParams)}\n【补充要求】\n${extra}\n${referenceImage ? '用户提供了商品参考图，仅图片生成模型接收图片；文字分析不能声称已查看图片。' : ''}`;
 
   const messages = [
-    { role: 'system', content: config.systemPrompt },
+    { role: 'system', content: config.systemPrompt + outputContract(agentId) },
     { role: 'user', content: userContent }
   ];
 
@@ -212,7 +220,7 @@ async function runAgent(agentId, input, options = {}) {
     try {
       const detail = await fetchLLMDetailed(messages, {
         temperature: config.temperature,
-        maxTokens: config.maxTokens,
+        maxTokens: Math.max(config.maxTokens, Math.min(16000, (params.count || 1) * (params.maxLength || 500) * 2 + 1500)),
         timeoutMs: 90000
       });
       rawOutput = detail.content;
@@ -223,11 +231,11 @@ async function runAgent(agentId, input, options = {}) {
   }
 
   if (!rawOutput) {
-    rawOutput = generateTemplate(agentId, config, input);
+    rawOutput = generateTemplate(agentId, config, input, params);
     source = 'template';
   }
 
-  const parsed = config.outputFormat === 'json' ? parseOutput(rawOutput) : { content: rawOutput };
+  const parsed = normalizeResult(agentId, config.outputFormat === 'json' ? parseOutput(rawOutput) : { content: rawOutput }, params);
   const durationMs = Date.now() - startTime;
   const tokenEstimate = estimateTokens(config.systemPrompt + userContent + rawOutput);
 
@@ -250,7 +258,9 @@ async function runAgent(agentId, input, options = {}) {
 }
 
 // ========== 模板降级生成器 ==========
-function generateTemplate(agentId, config, input) {
+function generateTemplate(agentId, config, input, options = {}) {
+  const local = fallback(agentId, input, options);
+  if (local) return JSON.stringify(local);
   const templates = {
     a1: () => JSON.stringify({
       overview: `针对「${input}」的蓝海探测分析已完成。`,

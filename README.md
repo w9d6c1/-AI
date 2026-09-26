@@ -133,3 +133,68 @@ ecom-ai-platform/
 - [ ] 启用 HTTPS
 - [ ] 按 [上线与恢复手册](deploy/RUNBOOK.md)完成备份恢复演练
 - [ ] 运行 `npm test` 与 `npm audit --omit=dev`
+
+---
+
+## 云端部署：GitHub Pages（前端） + Render（后端）
+
+架构说明：前端为纯静态 SPA（`public/`），由 GitHub Pages 托管在 `https://w9d6c1.github.io/-AI/`；后端 Express API 由 Render 托管；两端跨域通信（JWT Bearer 鉴权）。
+
+### 部署前准备
+
+1. 仓库 `w9d6c1/-AI` 已推送到 GitHub 的 `main` 分支。
+2. 后端 `JWT_SECRET` / `RPA_CALLBACK_TOKEN` 等密钥只在平台后台填写，**严禁提交到仓库**（`.env` 已 gitignore）。
+
+### 第一步：Render 部署后端
+
+1. 登录 [Render](https://render.com)，新建 **Blueprint**，关联 `w9d6c1/-AI` 仓库。
+2. 自动识别根目录 `render.yaml`，创建两个资源：
+   - Web 服务 `ecom-ai-backend`（Docker 运行时，`buildCommand: npm ci`，启动 `node server/index.js`，健康检查 `/api/health`）
+   - 托管 PostgreSQL `ecom-ai-db`
+3. 环境变量已由 `render.yaml` 预置（`JWT_SECRET` / `RPA_CALLBACK_TOKEN` 由 Render 自动生成随机值；`DATABASE_URL` 自动注入）。
+4. **首次建管理员账号**：在 Web 服务 Environment 里临时加 `SEED_DEFAULT_USERS=true` 与至少 12 位 `ADMIN_PASSWORD`，点 "Manual Deploy" 触发一次部署；看到日志创建完成后，改回 `SEED_DEFAULT_USERS=false` 再部署一次。
+5. 确认 `CORS_ORIGIN` = `https://w9d6c1.github.io`（`render.yaml` 已预置）。
+6. 记下后端的公网地址：`https://ecom-ai-backend.onrender.com`（在 Web 服务页顶部可见）。
+
+### 第二步：GitHub Pages 部署前端
+
+1. 仓库 → **Settings → Pages**，`Source` 选择 **GitHub Actions**。
+2. 仓库 → **Settings → Secrets and variables → Actions**，新建仓库 Secret：
+   - 名称：`BACKEND_API_URL`
+   - 值：`https://ecom-ai-backend.onrender.com`（第一步记下的后端地址，**末尾不要带斜杠**）
+3. 推送代码到 `main` 分支，`.github/workflows/deploy.yml` 自动运行：读取 `BACKEND_API_URL` → 生成 `public/js/config.js`（写入 `window.__API_BASE__`）→ 发布到 Pages。
+4. 访问 `https://w9d6c1.github.io/-AI/` 验证登录与数据。
+
+### 环境变量清单
+
+**后端（Render，可在 Web 服务 Environment 中查看/覆盖）**
+
+| 变量 | 必填 | 说明 |
+|---|---|---|
+| `NODE_ENV` | 是 | 固定 `production` |
+| `DB_DRIVER` | 是 | 固定 `postgres` |
+| `DATABASE_URL` | 是 | 由托管 Postgres 自动注入 |
+| `JWT_SECRET` | 是 | 登录密钥，Render 自动生成 |
+| `RPA_CALLBACK_TOKEN` | 是 | RPA 回调验证，Render 自动生成 |
+| `CORS_ORIGIN` | 是 | 前端域名 `https://w9d6c1.github.io` |
+| `TRUST_PROXY` | 是 | `1`（Render 前置代理） |
+| `ENABLE_HSTS` | 建议 | `true` |
+| `REDIS_REQUIRED` | 建议 | `false`（免费实例无 Redis，走内存降级） |
+| `ENABLE_SCHEDULER` | 建议 | `false`（单实例） |
+| `QUEUE_ENABLED` | 建议 | `false` |
+| `STORAGE_DRIVER` | 建议 | `local`（临时卷，重启丢上传文件） |
+| `AI_API_KEY` | 否 | 大模型 Key，不配则降级内置规则引擎 |
+| `SEED_DEFAULT_USERS` / `ADMIN_PASSWORD` | 仅首启 | 建管理员账号，用完关闭 |
+
+**前端（GitHub Actions Secret）**
+
+| Secret | 说明 |
+|---|---|
+| `BACKEND_API_URL` | 后端公网地址，如 `https://ecom-ai-backend.onrender.com` |
+
+### 重点提示
+
+- **CORS**：`CORS_ORIGIN` 必须精确等于 `https://w9d6c1.github.io`（无路径、无尾斜杠）。改域名时两端要同步改。
+- **Render 免费实例休眠**：15 分钟无请求会休眠，冷启动约 30~60 秒（首次访问慢属正常）。可外部定时（如 cron / UptimeRobot）每隔几分钟 ping `https://ecom-ai-backend.onrender.com/api/health` 缓解。
+- **密钥严禁上传 GitHub**：`JWT_SECRET`、`AI_API_KEY`、`RPA_APP_SECRET` 等只在 Render 后台填写；`BACKEND_API_URL` 是公开地址可用 Secret（但不是机密）。`.env` 已在 `.gitignore`，请勿手动 `git add .env`。
+- **数据持久化**：PostgreSQL 数据持久化在托管数据库；但 `STORAGE_DRIVER=local` 的上传文件存于 Render 临时卷，重启/重部署会丢失。生产建议接 S3 兼容对象存储（`STORAGE_DRIVER=s3` + `S3_*`）。

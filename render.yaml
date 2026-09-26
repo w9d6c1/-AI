@@ -1,0 +1,64 @@
+# Render Blueprint：一键部署后端（Express API）+ 托管 PostgreSQL
+# 前端由 GitHub Pages 托管，后端 URL 通过 GitHub Actions Secret 注入前端。
+services:
+  - type: web
+    name: ecom-ai-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TZ
+        value: Asia/Shanghai
+      # 数据库：生产固定 Postgres，连接串由下方托管数据库自动注入
+      - key: DB_DRIVER
+        value: postgres
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ecom-ai-db
+          property: connectionString
+      # 密钥：Render 自动生成随机值，不落仓库（严禁提交到 GitHub）
+      - key: JWT_SECRET
+        generateValue: true
+      - key: RPA_CALLBACK_TOKEN
+        generateValue: true
+      # CORS：允许 GitHub Pages 前端跨域访问（精确域名，无路径、无尾斜杠）
+      - key: CORS_ORIGIN
+        value: https://w9d6c1.github.io
+      # 反向代理 / HTTPS（Render 前置代理）
+      - key: TRUST_PROXY
+        value: "1"
+      - key: ENABLE_HSTS
+        value: "true"
+      # 免费实例无 Redis：关闭硬依赖，走内存降级（限流/会话缓存降级）
+      - key: REDIS_REQUIRED
+        value: "false"
+      # 单实例部署：关闭队列与调度，避免多实例重复消费
+      - key: ENABLE_SCHEDULER
+        value: "false"
+      - key: QUEUE_ENABLED
+        value: "false"
+      # 对象存储：默认 local（Render 文件系统为临时卷，重启会丢失上传文件，见 README）
+      - key: STORAGE_DRIVER
+        value: local
+      # RPA：默认 Mock 模式，接入影刀后再改
+      - key: RPA_MOCK_MODE
+        value: "true"
+      # 可选：AI 能力（未配置则降级为内置规则引擎）
+      # - key: AI_API_KEY
+      #   sync: false
+      # - key: AI_BASE_URL
+      #   value: https://api.deepseek.com/v1
+      # - key: AI_MODEL
+      #   value: deepseek-v4-pro
+      # - key: AI_IMAGE_API_KEY
+      #   sync: false
+
+databases:
+  - name: ecom-ai-db
+    plan: free
+    databaseName: ecom_ai
+    user: ecom

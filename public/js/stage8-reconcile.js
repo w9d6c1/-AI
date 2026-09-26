@@ -43,7 +43,7 @@ async function exportReconcile() {
     if ($('recon-shop').value) body.shop_ids = [Number($('recon-shop').value)];
     const created = await API.post('/reports', body);
     const token = localStorage.getItem('zy_token');
-    const resp = await fetch('/api/reports/' + created.id + '/download', { headers: { Authorization: 'Bearer ' + token } });
+    const resp = await fetch(__apiUrl('/api/reports/' + created.id + '/download'), { headers: { Authorization: 'Bearer ' + token } });
     const blob = await resp.blob();
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);

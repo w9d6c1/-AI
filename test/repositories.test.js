@@ -16,11 +16,11 @@ const { defineRepositoryContract } = require('./helpers/repo-contract');
 
 test('迁移幂等：首次应用基线，重复运行为空', async () => {
   const first = await runMigrations(defaultAdapter);
-  assert.deepEqual(first, ['0001_baseline', '0002_collection_tasks_constraints', '0003_tenants', '0004_ai_usage', '0005_stage2_integrations', '0006_stage3_data_model', '0007_stage4_ai', '0008_stage5_execution_closure', '0009_stage7_security', '0010_stage9_billing', '0011_stage9_quota_tokens', '0012_stage9_invoicing']);
+  assert.deepEqual(first, ['0001_baseline', '0002_collection_tasks_constraints', '0003_tenants', '0004_ai_usage', '0005_stage2_integrations', '0006_stage3_data_model', '0007_stage4_ai', '0008_stage5_execution_closure', '0009_stage7_security', '0010_stage9_billing', '0011_stage9_quota_tokens', '0012_stage9_invoicing', '0013_agent_workbench']);
   const second = await runMigrations(defaultAdapter);
   assert.deepEqual(second, []);
   const rows = await defaultAdapter.all('SELECT id FROM schema_migrations ORDER BY id');
-  assert.equal(rows.length, 12);
+  assert.equal(rows.length, 13);
 });
 
 async function beforeEachReset() {

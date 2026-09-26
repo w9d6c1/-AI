@@ -750,7 +750,9 @@ const newCols = [
   ['model', 'TEXT DEFAULT NULL'],
   ['tokens_in', 'INTEGER DEFAULT 0'],
   ['tokens_out', 'INTEGER DEFAULT 0'],
-  ['cost', 'REAL DEFAULT 0']
+  ['cost', 'REAL DEFAULT 0'],
+  ['input_options', "TEXT DEFAULT '{}'"],
+  ['favorite', 'INTEGER NOT NULL DEFAULT 0']
 ];
 for (const [col, def] of newCols) {
   if (!existingCols.includes(col)) {

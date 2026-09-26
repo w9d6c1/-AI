@@ -28,7 +28,7 @@ async function authedFetch(path, opts = {}) {
   const token = localStorage.getItem('zy_token');
   const headers = Object.assign({}, opts.headers || {});
   if (token) headers['Authorization'] = 'Bearer ' + token;
-  return fetch('/api' + path, { ...opts, headers });
+  return fetch(__apiUrl('/api' + path), { ...opts, headers });
 }
 
 // ---------- 通用列表分页 ----------

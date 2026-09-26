@@ -8,6 +8,8 @@ const { runAgent } = require('../inference');
 const { getAgentCatalog } = require('../agent-prompts');
 const { getStats, getProviderInfo, aiEnabled } = require('../ai');
 const { todayLocal, dateLocalOffset } = require('../util');
+const { getWorkbench, validateRequest } = require('../agent-workbench');
+const { executeAgent, readRun } = require('../agent-execution');
 
 const router = express.Router();
 router.use(authRequired);
@@ -49,7 +51,10 @@ const AGENTS = [
 
 // 智能体目录
 router.get('/agents', (req, res) => {
-  res.json({ agents: AGENTS });
+  res.json({ agents: AGENTS.map(group => ({ ...group, items: group.items.map(item => {
+    const workbench = getWorkbench(item.id);
+    return { ...item, ...(workbench ? { desc: workbench.description, workbench } : {}) };
+  }) })) });
 });
 
 // 推理层状态：提供商信息 + 用量统计
@@ -92,53 +97,43 @@ router.get('/usage/stats', asyncH(async (req, res) => {
 
 // 执行智能体（通过推理层）
 router.post('/agents/:id/run', asyncH(async (req, res) => {
-  const t = requireTenant();
+  res.json(await executeAgent(req.user, req.params.id, req.body));
+}));
+
+router.post('/agents/:id/batch', asyncH(async (req, res) => {
   const { id } = req.params;
-  const { input, extra } = req.body || {};
-
-  const agent = getAgentCatalog()[id];
-  if (!agent) return res.status(404).json({ error: '智能体不存在' });
-  if (!input || !String(input).trim()) return res.status(400).json({ error: '请输入分析对象' });
-
-  await enforceAiQuota(t);
-  await enforceUsageQuota(t);
-
-  // 调用推理层执行
-  const result = await runAgent(id, String(input).trim(), {
-    userId: req.user.id,
-    extra: extra || ''
-  });
-
-  // 存入数据库（含结构化结果与用量成本）
-  const info = await repos.adapter.run(
-    'INSERT INTO agent_runs (user_id, agent_id, agent_name, input, result, result_parsed, source, tokens_est, duration_ms, extra, tenant_id, provider, model, tokens_in, tokens_out, cost) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
-    [req.user.id, id, agent.name, String(input).trim(), result.raw_output, JSON.stringify(result.result), result.source, result.tokens_est, result.duration_ms, extra || null, t, result.provider || null, result.model || null, result.tokens_in || 0, result.tokens_out || 0, result.cost || 0]
-  );
-
-  res.json({
-    runId: info.lastInsertRowid,
-    agent_id: id,
-    agent_name: agent.name,
-    input: String(input).trim(),
-    result: result.result,
-    source: result.source,
-    tokens_est: result.tokens_est,
-    duration_ms: result.duration_ms,
-    provider: result.provider || null,
-    model: result.model || null,
-    cost: result.cost || 0
-  });
+  if (!getWorkbench(id)?.supportsBatch) return res.status(400).json({ error: '该智能体不支持批量分析' });
+  const items = req.body?.items;
+  if (!Array.isArray(items) || !items.length || items.length > 5) return res.status(400).json({ error: '每批支持 1–5 个任务' });
+  items.forEach(body => validateRequest(id, body));
+  const results = [];
+  for (const [index, item] of items.entries()) {
+    try { results.push({ index, status: 'success', ...await executeAgent(req.user, id, item) }); }
+    catch (e) { results.push({ index, status: 'failed', error: e.status && e.status < 500 ? e.message : '任务执行失败，请重试' }); }
+  }
+  res.json({ results, success: results.filter(r => r.status === 'success').length, total: items.length });
 }));
 
 // 执行历史（含结构化结果）
 router.get('/agent-runs', asyncH(async (req, res) => {
   const t = requireTenant();
-  const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
-  const offset = Math.max(0, Number(req.query.offset) || 0);
+  const limit = Math.min(200, Math.max(1, Math.floor(Number(req.query.limit) || 50)));
+  const offset = Math.max(0, Math.min(1000000, Math.floor(Number(req.query.offset) || 0)));
+  let where = 'user_id=? AND tenant_id=?';
+  const params = [req.user.id, t];
+  if (req.query.agent_id) { where += ' AND agent_id=?'; params.push(String(req.query.agent_id)); }
+  if (req.query.favorite === '1') where += ' AND favorite=1';
+  if (req.query.q) { where += ' AND input LIKE ?'; params.push('%' + String(req.query.q).slice(0, 100) + '%'); }
+  for (const key of ['date_start', 'date_end']) {
+    if (!req.query[key]) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.query[key])) return res.status(400).json({ error: '日期格式不正确' });
+    where += key === 'date_start' ? ' AND created_at >= ?' : ' AND created_at <= ?';
+    params.push(String(req.query[key]) + (key === 'date_end' ? ' 23:59:59' : ''));
+  }
   const runs = await repos.adapter.all(
-    `SELECT id, agent_id, agent_name, input, result, result_parsed, source, tokens_est, duration_ms, created_at
-     FROM agent_runs WHERE user_id=? AND tenant_id=? ORDER BY id DESC LIMIT ? OFFSET ?`,
-    [req.user.id, t, limit, offset]
+    `SELECT id, agent_id, agent_name, input, result, result_parsed, source, tokens_est, duration_ms, created_at, favorite
+     FROM agent_runs WHERE ${where} ORDER BY id DESC LIMIT ? OFFSET ?`,
+    [...params, limit, offset]
   );
 
   const parsed = runs.map(r => {
@@ -147,22 +142,40 @@ router.get('/agent-runs', asyncH(async (req, res) => {
     return { ...r, result_parsed: structured };
   });
 
-  res.json({ runs: parsed, limit, offset });
+  const count = await repos.adapter.get(`SELECT COUNT(*) count FROM agent_runs WHERE ${where}`, params);
+  res.json({ runs: parsed, limit, offset, total: Number(count.count) });
 }));
 
 // 获取单次执行详情
 router.get('/agent-runs/:id', asyncH(async (req, res) => {
-  const t = requireTenant();
-  const run = await repos.adapter.get(
-    `SELECT id, agent_id, agent_name, input, result, result_parsed, source, tokens_est, duration_ms, created_at
-     FROM agent_runs WHERE id=? AND user_id=? AND tenant_id=?`,
-    [req.params.id, req.user.id, t]
-  );
-  if (!run) return res.status(404).json({ error: '记录不存在' });
+  res.json(await readRun(req.user, req.params.id));
+}));
 
-  let structured = null;
-  try { structured = run.result_parsed ? JSON.parse(run.result_parsed) : null; } catch (e) {}
-  res.json({ ...run, result_parsed: structured });
+router.patch('/agent-runs/:id', asyncH(async (req, res) => {
+  if (typeof req.body?.favorite !== 'boolean') return res.status(400).json({ error: 'favorite 必须为布尔值' });
+  await readRun(req.user, req.params.id);
+  await repos.adapter.run('UPDATE agent_runs SET favorite=? WHERE id=? AND user_id=? AND tenant_id=?', [req.body.favorite ? 1 : 0, req.params.id, req.user.id, requireTenant()]);
+  res.json({ ok: true, favorite: req.body.favorite });
+}));
+
+router.delete('/agent-runs/:id', asyncH(async (req, res) => {
+  await readRun(req.user, req.params.id);
+  await repos.adapter.run('DELETE FROM agent_runs WHERE id=? AND user_id=? AND tenant_id=?', [req.params.id, req.user.id, requireTenant()]);
+  res.json({ ok: true });
+}));
+
+router.post('/agent-runs/:id/export', asyncH(async (req, res) => {
+  const run = await readRun(req.user, req.params.id);
+  const format = req.body?.format || 'json';
+  if (!['json', 'txt', 'csv', 'xls'].includes(format)) return res.status(400).json({ error: '支持 JSON、TXT、CSV、Excel XML (.xls)' });
+  const result = run.result_parsed || run.result;
+  const rows = result && typeof result === 'object' ? Object.entries(result).map(([key, value]) => ({ key, value: typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value ?? '待补充') })) : [{ key: '正文', value: String(result || '') }];
+  let content;
+  if (format === 'json') content = JSON.stringify({ agent: run.agent_name, input: run.input, options: run.options, source: run.source, result }, null, 2);
+  if (format === 'txt') content = `${run.agent_name}\n输入：${run.input}\n来源：${run.source}\n\n` + rows.map(r => r.key + '\n' + r.value).join('\n\n');
+  if (format === 'csv') content = '\uFEFF' + require('../csv').toCsv(rows.map(r => ({ key: r.key, value: /^[=+\-@\t\r\n]/.test(r.value) ? "'" + r.value : r.value })), [{ key: 'key', label: '字段' }, { key: 'value', label: '内容' }]);
+  if (format === 'xls') content = require('../xlsx').toSpreadsheetML('智能体结果', [{ key: 'key', label: '字段' }, { key: 'value', label: '内容' }], rows);
+  res.json({ filename: `agent-${run.agent_id}-${run.id}.${format}`, content, mime: { json: 'application/json', txt: 'text/plain', csv: 'text/csv', xls: 'application/vnd.ms-excel' }[format] });
 }));
 
 module.exports = router;

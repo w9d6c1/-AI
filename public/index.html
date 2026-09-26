@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>智营 AI — 电商经营全链路智能平台</title>
 <link rel="stylesheet" href="https://miaoda.feishu.cn/fonts/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap">
-<script src="/vendor/echarts.min.js"></script>
+<script src="vendor/echarts.min.js"></script>
 <style>
 /* ===== 设计变量 ===== */
 :root {
@@ -608,7 +608,17 @@ input, textarea, select { font-family:inherit; outline:none; }
       <!-- ===== AI 智能体 ===== -->
       <div class="view" id="view-agents">
         <div id="agent-market">
+          <div class="agent-hero">
+            <div><div class="agent-eyebrow">AI WORKSPACE · 电商智能工作台</div><h2>从找到机会，到做出好内容</h2><p>9 个专业智能体，连接选品、诊断与创作。输入商品信息或经营数据，生成可复用的分析、文案与主图。</p></div>
+            <button class="btn btn-primary" onclick="openAgent('a17')">＋ 开始文案创作</button>
+          </div>
+          <div class="agent-tools">
+            <input id="agent-search" class="form-input" placeholder="搜索智能体、用途或关键词" aria-label="搜索智能体" oninput="renderAgentGrid(state.agentCategory)">
+            <select id="agent-scope" class="form-select" aria-label="智能体范围" onchange="renderAgentGrid(state.agentCategory)"><option value="core">核心 9 个智能体</option><option value="all">全部智能体</option></select>
+            <button class="btn btn-outline" onclick="navigate('agent-runs')">运行历史与收藏</button>
+          </div>
           <div class="agent-category-tabs" id="agent-tabs"></div>
+          <div id="agent-market-count" class="agent-market-count"></div>
           <div class="agent-grid" id="agent-grid"></div>
         </div>
         <div class="agent-workspace" id="agent-workspace">
@@ -616,11 +626,13 @@ input, textarea, select { font-family:inherit; outline:none; }
             <button class="btn btn-outline btn-sm" onclick="backToAgentMarket()">← 返回智能体市场</button>
             <div id="workspace-agent-name" style="font-size:16px;font-weight:600;"></div>
           </div>
+          <div class="agent-workspace-layout">
           <div class="agent-input-panel" id="agent-input-panel"></div>
-          <div class="agent-result" id="agent-result" style="display:none;">
-            <div class="card-title">分析结果</div>
+          <div class="agent-result" id="agent-result" style="display:none;" aria-live="polite">
             <div id="agent-result-content"></div>
           </div>
+          </div>
+          <div id="agent-workspace-history" style="margin-top:24px;"></div>
         </div>
       </div>
 
@@ -1961,19 +1973,22 @@ input, textarea, select { font-family:inherit; outline:none; }
       </div>
 
 <!-- 阶段 8 视图逻辑（拆分文件，便于多终端并行开发）-->
-<script src="/js/stage8-core.js"></script>
-<script src="/js/stage8-import.js"></script>
-<script src="/js/stage8-data.js"></script>
-<script src="/js/stage8-reconcile.js"></script>
-<script src="/js/stage8-runs.js"></script>
-<script src="/js/stage8-usage.js"></script>
-<script src="/js/stage8-security.js"></script>
-<script src="/js/stage8-executions.js"></script>
-<script src="/js/stage8-kb.js"></script>
-<script src="/js/stage8-reports.js"></script>
-<script src="/js/stage8-admin.js"></script>
-<script src="/js/stage9-admin.js"></script>
-<script src="/js/stage9-billing.js"></script>
+<script src="js/stage8-core.js"></script>
+<script src="js/stage8-import.js"></script>
+<script src="js/stage8-data.js"></script>
+<script src="js/stage8-reconcile.js"></script>
+<script src="js/stage8-runs.js"></script>
+<script src="js/stage8-usage.js"></script>
+<script src="js/stage8-security.js"></script>
+<script src="js/stage8-executions.js"></script>
+<script src="js/stage8-kb.js"></script>
+<script src="js/stage8-reports.js"></script>
+<script src="js/stage8-admin.js"></script>
+<script src="js/stage9-admin.js"></script>
+<script src="js/stage9-billing.js"></script>
+<link rel="stylesheet" href="css/agents-workbench.css">
+<script src="js/agents-workbench.js"></script>
+<script src="js/config.js"></script>
 <script>
 // ===== 智营AI 前端应用逻辑（连接真实后端 API）=====
 
@@ -1983,7 +1998,18 @@ const API = {
     const token = localStorage.getItem('zy_token');
     const headers = { 'Content-Type': 'application/json' };
     if (token) headers['Authorization'] = 'Bearer ' + token;
-    const resp = await fetch('/api' + path, { ...opts, headers });
+    let resp;
+    try {
+      resp = await fetch(__apiUrl('/api' + path), { ...opts, headers });
+    } catch (networkError) {
+      const origin = window.location.origin === 'null' ? '本地文件' : window.location.origin;
+      const hint = origin.includes(':3000')
+        ? '当前打开的是 3000 端口，该端口不是本项目服务，请改用 http://localhost:3210'
+        : origin === '本地文件'
+          ? '请通过 http://localhost:3210 打开系统，不要直接双击 HTML 文件'
+          : '请确认项目服务正在运行，并检查当前页面地址与服务端口是否一致';
+      throw new Error(`无法连接到服务（${origin}）。${hint}`);
+    }
     if (resp.status === 401) {
       localStorage.removeItem('zy_token');
       localStorage.removeItem('zy_user');
@@ -2493,101 +2519,7 @@ async function sendMessage() {
   state.sending = false;
 }
 
-// ---------- AI 智能体 ----------
-async function loadAgents() {
-  try {
-    const data = await API.get('/agents');
-    state.agents = data.agents;
-    renderAgentTabs();
-    renderAgentGrid(state.agentCategory);
-  } catch (e) { showToast(e.message, 'error'); }
-}
-function renderAgentTabs() {
-  const cats = ['全部', ...state.agents.map(c => c.cat)];
-  $('agent-tabs').innerHTML = cats.map((c, i) => `
-    <button class="filter-btn ${i === 0 ? 'active' : ''}" onclick="filterAgents(this,'${c}')">${c}</button>
-  `).join('');
-}
-function filterAgents(btn, cat) {
-  state.agentCategory = cat;
-  document.querySelectorAll('#agent-tabs .filter-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderAgentGrid(cat);
-}
-function renderAgentGrid(cat) {
-  let items = [];
-  if (cat === '全部') { state.agents.forEach(c => items = items.concat(c.items)); }
-  else { const found = state.agents.find(c => c.cat === cat); if (found) items = found.items; }
-  $('agent-grid').innerHTML = items.map(a => `
-    <div class="agent-card" onclick="openAgent('${a.id}')">
-      <div class="agent-icon" style="background:${a.color};">${a.icon}</div>
-      <div class="agent-name">${esc(a.name)}</div>
-      <div class="agent-desc">${esc(a.desc)}</div>
-    </div>
-  `).join('');
-}
-function openAgent(id) {
-  let agent = null;
-  state.agents.forEach(c => c.items.forEach(i => { if (i.id === id) agent = i; }));
-  if (!agent) return;
-  state.currentAgent = agent;
-  $('workspace-agent-name').textContent = agent.icon + ' ' + agent.name;
-  $('agent-market').style.display = 'none';
-  $('agent-workspace').classList.add('active');
-  $('agent-result').style.display = 'none';
-  $('agent-input-panel').innerHTML = `
-    <div class="card-title">${esc(agent.name)} — 输入参数</div>
-    <div class="grid grid-2">
-      <div class="form-group">
-        <label class="form-label">商品名称 / 关键词</label>
-        <input class="form-input" id="agent-input-1" placeholder="请输入商品名称或分析关键词">
-      </div>
-      <div class="form-group">
-        <label class="form-label">分析周期</label>
-        <select class="form-select" id="agent-input-2">
-          <option>近7天</option><option selected>近30天</option><option>近90天</option>
-        </select>
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">补充说明（选填）</label>
-      <textarea class="form-textarea" id="agent-input-3" placeholder="补充你关注的具体问题或特殊需求"></textarea>
-    </div>
-    <button class="btn btn-primary" onclick="runAgent()">开始分析</button>
-  `;
-}
-function backToAgentMarket() {
-  $('agent-market').style.display = 'block';
-  $('agent-workspace').classList.remove('active');
-  state.currentAgent = null;
-}
-async function runAgent() {
-  const a = state.currentAgent;
-  const input = $('agent-input-1').value.trim();
-  const period = $('agent-input-2').value;
-  const extra = $('agent-input-3').value.trim();
-  if (!input) { showToast('请输入分析对象', 'warn'); return; }
-  $('agent-result').style.display = 'block';
-  $('agent-result-content').innerHTML = '<div class="result-section"><p style="color:var(--text-muted);">AI 正在分析中...</p></div>';
-  try {
-    const data = await API.post('/agents/' + a.id + '/run', { input, period, extra });
-    // 模板结果（结构化）或 LLM 结果（文本）
-    if (typeof data.result === 'string') {
-      $('agent-result-content').innerHTML = '<div class="result-section"><p>' + mdToHtml(data.result) + '</p></div>';
-    } else {
-      const r = data.result;
-      $('agent-result-content').innerHTML = `
-        <div class="result-section"><h4>分析概览</h4><p>${esc(r.overview)}</p></div>
-        <div class="result-section"><h4>核心发现</h4><ul>${r.findings.map(f => '<li>' + esc(f) + '</li>').join('')}</ul></div>
-        <div class="result-section"><h4>优化建议</h4><ol>${r.suggestions.map(s => '<li>' + esc(s) + '</li>').join('')}</ol></div>
-        <div class="result-section"><h4>预期效果</h4><p>${esc(r.expected)}</p></div>`;
-    }
-    showToast('分析完成！');
-  } catch (e) {
-    $('agent-result-content').innerHTML = '<div class="result-section"><p style="color:var(--danger);">' + esc(e.message) + '</p></div>';
-    showToast(e.message, 'error');
-  }
-}
+// 智能体工作台实现见 /js/agents-workbench.js。
 
 // ---------- AI 创作 ----------
 function switchCreationTab(tab, el) {
@@ -2624,7 +2556,7 @@ async function generateImages() {
       data.urls.forEach((url, i) => {
         const div = document.createElement('div');
         div.className = 'gen-image';
-        div.innerHTML = `<img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>生成失败</span>'"><div class="gen-label">方案 ${i + 1}</div>`;
+        div.innerHTML = `<img src="${esc(__apiUrl(url))}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>生成失败</span>'"><div class="gen-label">方案 ${i + 1}</div>`;
         grid.appendChild(div);
       });
     } else {
@@ -2651,7 +2583,7 @@ async function loadImages() {
       // 在文生图结果区展示最近一次生成
       const last = data.images[0];
       if (last.url) {
-        $('t2i-result').innerHTML = `<div class="gen-image" style="grid-column:1/-1;"><img src="${esc(last.url)}" style="width:100%;height:100%;object-fit:cover;"><div class="gen-label">${esc(last.prompt.slice(0, 20))}</div></div>`;
+        $('t2i-result').innerHTML = `<div class="gen-image" style="grid-column:1/-1;"><img src="${esc(__apiUrl(last.url))}" style="width:100%;height:100%;object-fit:cover;"><div class="gen-label">${esc(last.prompt.slice(0, 20))}</div></div>`;
       }
     }
   } catch (e) { /* 静默 */ }
@@ -3065,7 +2997,7 @@ function renderGeneratedResult(containerId, urls, count, prompt, labelPrefix) {
     const div = document.createElement('div');
     div.className = 'gen-image';
     if (urls && urls[i]) {
-      div.innerHTML = `<img src="${esc(urls[i])}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>加载失败</span>'"><div class="gen-label">${labelPrefix} ${i + 1}</div>`;
+      div.innerHTML = `<img src="${esc(__apiUrl(urls[i]))}" style="width:100%;height:100%;object-fit:cover;" onerror="this.outerHTML='<span>加载失败</span>'"><div class="gen-label">${labelPrefix} ${i + 1}</div>`;
     } else {
       div.style.background = colors[i % colors.length];
       div.style.color = '#fff';
@@ -3113,7 +3045,7 @@ async function generateScene() {
 async function uploadFile(file) {
   const fd = new FormData();
   fd.append('file', file);
-  const resp = await fetch('/api/upload', {
+  const resp = await fetch(__apiUrl('/api/upload'), {
     method: 'POST',
     headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('zy_token') || '') },
     body: fd
@@ -4416,7 +4348,7 @@ function submitReportForm() {
 
 async function downloadReport(id) {
   try {
-    const response = await fetch('/api/reports/' + id + '/download', {
+    const response = await fetch(__apiUrl('/api/reports/' + id + '/download'), {
       headers: { Authorization: 'Bearer ' + (localStorage.getItem('zy_token') || '') }
     });
     if (!response.ok) { const body = await response.json(); throw new Error(body.error || '下载失败'); }
@@ -4634,7 +4566,7 @@ async function submitPermissions() {
 
 </script>
 <script>
-fetch('/api/auth/config').then(r => r.json()).then(config => {
+fetch(__apiUrl('/api/auth/config')).then(r => r.json()).then(config => {
   document.getElementById('registration-tab').style.display = config.registration_enabled ? '' : 'none';
 }).catch(() => {});
 </script>
