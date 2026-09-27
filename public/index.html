@@ -615,9 +615,11 @@ input, textarea, select { font-family:inherit; outline:none; }
           <div class="agent-tools">
             <input id="agent-search" class="form-input" placeholder="搜索智能体、用途或关键词" aria-label="搜索智能体" oninput="renderAgentGrid(state.agentCategory)">
             <select id="agent-scope" class="form-select" aria-label="智能体范围" onchange="renderAgentGrid(state.agentCategory)"><option value="core">核心 9 个智能体</option><option value="all">全部智能体</option></select>
-            <button class="btn btn-outline" onclick="navigate('agent-runs')">运行历史与收藏</button>
-          </div>
-          <div class="agent-category-tabs" id="agent-tabs"></div>
+             <button class="btn btn-outline" onclick="navigate('agent-runs')">运行历史与收藏</button>
+             <button class="btn btn-outline" onclick="toggleAgentWorkflowPanel()">工作流</button>
+           </div>
+           <div id="agent-workflow-panel" class="card" style="display:none;margin-bottom:18px;"></div>
+           <div class="agent-category-tabs" id="agent-tabs"></div>
           <div id="agent-market-count" class="agent-market-count"></div>
           <div class="agent-grid" id="agent-grid"></div>
         </div>

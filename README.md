@@ -198,3 +198,6 @@ ecom-ai-platform/
 - **Render 免费实例休眠**：15 分钟无请求会休眠，冷启动约 30~60 秒（首次访问慢属正常）。可外部定时（如 cron / UptimeRobot）每隔几分钟 ping `https://ecom-ai-backend.onrender.com/api/health` 缓解。
 - **密钥严禁上传 GitHub**：`JWT_SECRET`、`AI_API_KEY`、`RPA_APP_SECRET` 等只在 Render 后台填写；`BACKEND_API_URL` 是公开地址可用 Secret（但不是机密）。`.env` 已在 `.gitignore`，请勿手动 `git add .env`。
 - **数据持久化**：PostgreSQL 数据持久化在托管数据库；但 `STORAGE_DRIVER=local` 的上传文件存于 Render 临时卷，重启/重部署会丢失。生产建议接 S3 兼容对象存储（`STORAGE_DRIVER=s3` + `S3_*`）。
+- **免费 Postgres 30 天过期**：Render 免费 Postgres 数据库**创建 30 天后会被删除**。到期前需升级付费或迁移到新库，否则数据丢失（重新部署会自动重建 Schema，但需再次临时开启 `SEED_DEFAULT_USERS` 建管理员）。
+- **数据库连接报错排查**：免费实例内部连接默认不需要 SSL，一般直接可用；若日志出现 SSL / 握手错误，在 `DATABASE_URL` 末尾追加 `?sslmode=require` 即可（内部连接不支持 `verify-full`）。
+- **首次部署无管理员**：空库首启不会创建账号（`ALLOW_REGISTRATION` 默认关闭）。需在 Render 后台临时加 `SEED_DEFAULT_USERS=true` + 至少 12 位 `ADMIN_PASSWORD`，部署建号后再改回 `false`（该逻辑幂等，已有用户时自动跳过）。

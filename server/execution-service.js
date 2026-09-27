@@ -49,7 +49,7 @@ async function dailyCount(shopId) {
 }
 
 // 创建执行：人工→pending_manual；自动→pending_approval（倒计时 not_before）
-async function createExecution({ suggestionItem, shop, userId }) {
+async function createExecution({ suggestionItem, shop, userId, workflowRunId = null, workflowNodeKey = null }) {
   const t = requireTenant();
   const cfg = autoConfig();
   const expected = suggestionItem.suggested_value ?? null;
@@ -65,15 +65,15 @@ async function createExecution({ suggestionItem, shop, userId }) {
   if (cfg.enabled) {
     const notBefore = nowLocal(new Date(Date.now() + cfg.countdownSec * 1000));
     const info = await repos.adapter.run(
-      'INSERT INTO executions (tenant_id, suggestion_item_id, shop_id, action_type, target_campaign_id, params_json, status, expected_value, before_value, is_auto, not_before, started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      [t, suggestionItem.id, suggestionItem.shop_id, suggestionItem.action_type, suggestionItem.campaign_id, JSON.stringify(params), 'pending_approval', expected, before, 1, notBefore, now]
+      'INSERT INTO executions (tenant_id, suggestion_item_id, shop_id, action_type, target_campaign_id, params_json, status, expected_value, before_value, is_auto, not_before, reason, workflow_run_id, workflow_node_key, started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+      [t, suggestionItem.id || null, suggestionItem.shop_id, suggestionItem.action_type, suggestionItem.campaign_id, JSON.stringify(params), 'pending_approval', expected, before, 1, notBefore, suggestionItem.reason || null, workflowRunId, workflowNodeKey, now]
     );
     return { id: info.lastInsertRowid, status: 'pending_approval', auto: true, not_before: notBefore };
   }
 
   const info = await repos.adapter.run(
-    'INSERT INTO executions (tenant_id, suggestion_item_id, shop_id, action_type, target_campaign_id, params_json, status, expected_value, before_value, is_auto, started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-    [t, suggestionItem.id, suggestionItem.shop_id, suggestionItem.action_type, suggestionItem.campaign_id, JSON.stringify(params), 'queued', expected, before, 0, now]
+    'INSERT INTO executions (tenant_id, suggestion_item_id, shop_id, action_type, target_campaign_id, params_json, status, expected_value, before_value, is_auto, reason, workflow_run_id, workflow_node_key, started_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+    [t, suggestionItem.id || null, suggestionItem.shop_id, suggestionItem.action_type, suggestionItem.campaign_id, JSON.stringify(params), 'queued', expected, before, 0, suggestionItem.reason || null, workflowRunId, workflowNodeKey, now]
   );
   const execId = info.lastInsertRowid;
   await executors.get('manual').execute({

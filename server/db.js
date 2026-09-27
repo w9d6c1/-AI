@@ -345,6 +345,8 @@ CREATE TABLE IF NOT EXISTS executions (
   not_before TEXT,
   rollback_of INTEGER,
   reason TEXT,
+  workflow_run_id INTEGER,
+  workflow_node_key TEXT,
   started_at TEXT,
   finished_at TEXT,
   created_at TEXT DEFAULT (datetime('now','localtime')),
@@ -734,6 +736,74 @@ CREATE INDEX IF NOT EXISTS idx_payments_invoice ON payments(tenant_id, invoice_i
 
 // 默认租户（tenant_id 默认 1 的基础行；幂等，保证新库/测试库也有可用的租户 1）
 db.prepare("INSERT OR IGNORE INTO tenants (id, name, slug, status, plan) VALUES (1, '默认租户', 'default', 'active', 'internal')").run();
+
+// 工作流表的 SQLite 基础库兜底：测试环境直接加载 db.js，不经过启动阶段迁移。
+// 正式环境仍由 0014_agent_workflows 记录迁移版本并负责 PostgreSQL 建表。
+db.exec(`
+CREATE TABLE IF NOT EXISTS agent_workflows (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'active',
+  definition_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now','localtime')),
+  updated_at TEXT DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_agent_workflows_owner ON agent_workflows(tenant_id,user_id,id);
+CREATE TABLE IF NOT EXISTS agent_workflow_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  workflow_id INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running',
+  current_node TEXT,
+  input_json TEXT DEFAULT '{}',
+  output_json TEXT DEFAULT '{}',
+  error_message TEXT,
+  started_at TEXT DEFAULT (datetime('now','localtime')),
+  finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_workflow_runs_owner ON agent_workflow_runs(tenant_id,user_id,id);
+CREATE TABLE IF NOT EXISTS agent_workflow_nodes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  run_id INTEGER NOT NULL,
+  node_key TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  position INTEGER NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  input_json TEXT DEFAULT '{}',
+  result_json TEXT DEFAULT '{}',
+  source_run_id INTEGER,
+  node_type TEXT NOT NULL DEFAULT 'agent',
+  review_status TEXT,
+  reviewed_by INTEGER,
+  reviewed_at TEXT,
+  review_note TEXT,
+  error_message TEXT,
+  started_at TEXT,
+  finished_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_agent_workflow_nodes_run ON agent_workflow_nodes(tenant_id,run_id,position);
+`);
+
+// 工作流生成的执行任务来源字段：直接加载 db.js 的测试库也必须具备。
+const executionWorkflowCols = db.prepare('PRAGMA table_info(executions)').all().map(c => c.name);
+if (!executionWorkflowCols.includes('workflow_run_id')) db.exec('ALTER TABLE executions ADD COLUMN workflow_run_id INTEGER');
+if (!executionWorkflowCols.includes('workflow_node_key')) db.exec('ALTER TABLE executions ADD COLUMN workflow_node_key TEXT');
+db.exec('CREATE INDEX IF NOT EXISTS idx_executions_workflow_run ON executions(tenant_id, workflow_run_id)');
+db.exec(`CREATE TABLE IF NOT EXISTS agent_workflow_execution_batches (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  tenant_id INTEGER NOT NULL,
+  workflow_run_id INTEGER NOT NULL,
+  created_by INTEGER NOT NULL,
+  actions_json TEXT NOT NULL,
+  created_at TEXT DEFAULT (datetime('now','localtime')),
+  UNIQUE(tenant_id, workflow_run_id)
+);
+CREATE INDEX IF NOT EXISTS idx_agent_workflow_execution_batches_owner ON agent_workflow_execution_batches(tenant_id,created_by,id);`);
 
 // ===== Schema 迁移：agent_runs 新增字段 =====
 if (!db.prepare('PRAGMA table_info(users)').all().some(c => c.name === 'session_version')) {

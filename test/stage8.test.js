@@ -25,7 +25,7 @@ const { signToken } = require('../server/middleware');
 const { db } = require('../server/db');
 const { todayLocal } = require('../server/util');
 
-let server, base, token, token2, adminId, otherId;
+let server, base, token, token2, adminId, otherId, shopId;
 let runOwn, runOther, runBadJson;
 const today = todayLocal();
 
@@ -33,7 +33,7 @@ before(async () => {
   await runWithTenant(1, async () => {
     adminId = (await defaultAdapter.run('INSERT INTO users (tenant_id,username,password_hash,role) VALUES (?,?,?,?)', [1, 'admin', bcrypt.hashSync('x', 4), 'admin'])).lastInsertRowid;
     otherId = (await defaultAdapter.run('INSERT INTO users (tenant_id,username,password_hash,role) VALUES (?,?,?,?)', [1, 'operator', bcrypt.hashSync('x', 4), 'operator'])).lastInsertRowid;
-    await defaultAdapter.run('INSERT INTO shops (tenant_id,shop_name,qianniu_account,platform,status,daily_adjust_limit) VALUES (?,?,?,?,?,?)', [1, '阶段8店', 'qn_s8', 'taobao', 'active', 50]);
+    shopId = (await defaultAdapter.run('INSERT INTO shops (tenant_id,shop_name,qianniu_account,platform,status,daily_adjust_limit) VALUES (?,?,?,?,?,?)', [1, '阶段8店', 'qn_s8', 'taobao', 'active', 50])).lastInsertRowid;
 
     const runSql = 'INSERT INTO agent_runs (tenant_id,user_id,agent_id,agent_name,input,result,result_parsed,source,tokens_est,duration_ms,provider,model,tokens_in,tokens_out,cost) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)';
     runOwn = (await defaultAdapter.run(runSql, [1, adminId, 'a1', '蓝海探测智能体', '连衣裙', 'raw-own', JSON.stringify({ ok: true, items: [1, 2] }), 'rule', 12, 8, 'local', 'm1', 5, 7, 0.02])).lastInsertRowid;
@@ -162,4 +162,124 @@ test('S8 用量统计：按 provider/能力/模型聚合 + 智能体维度 + 日
   const empty = await json(await req('/usage/stats?date_start=2000-01-01&date_end=2000-01-02'));
   assert.equal(empty.usage.length, 0);
   assert.equal(empty.agent_runs.runs, 0);
+});
+
+test('S8 工作流：创建、顺序运行、节点快照与跨用户隔离', async () => {
+  const created = await json(await req('/agent-workflows', 'POST', {
+    name: '选品基础流程',
+    description: '回归测试工作流',
+    nodes: [
+      { key: 'market', agentId: 'a1' },
+      { key: 'keywords', agentId: 'a6', inputFrom: 'previous', inputTemplate: '{{workflow_input}}' }
+    ]
+  }), 201);
+  assert.equal(created.definition.nodes.length, 2);
+  const list = await json(await req('/agent-workflows'));
+  assert.ok(list.workflows.some(w => Number(w.id) === Number(created.id)));
+  const run = await json(await req('/agent-workflows/' + created.id + '/run', 'POST', { input: '通勤双肩包', options: { period: '近30天' } }));
+  assert.equal(run.status, 'success');
+  assert.equal(run.nodes.length, 2);
+  assert.ok(run.nodes.every(n => n.status === 'success' && n.runId));
+  const runDetail = await json(await req('/agent-workflow-runs/' + run.runId));
+  assert.equal(runDetail.nodes.length, 2);
+  assert.equal(runDetail.nodes[1].input.input, '通勤双肩包');
+  const own = await json(await req('/agent-workflows/' + created.id));
+  assert.equal(Number(own.id), Number(created.id));
+  const other = await req('/agent-workflows/' + created.id, 'GET', undefined, token2);
+  assert.equal(other.status, 404);
+  const bad = await req('/agent-workflows', 'POST', { name: '非法流程', nodes: [{ key: 'bad', agentId: 'not-found' }] });
+  assert.equal(bad.status, 400);
+  const failing = await json(await req('/agent-workflows', 'POST', { name: '失败重试流程', nodes: [{ key: 'image', agentId: 'a9', options: { renderMode: '生成图片' } }] }), 201);
+  const failedRun = await json(await req('/agent-workflows/' + failing.id + '/run', 'POST', { input: '测试商品' }));
+  assert.equal(failedRun.status, 'failed');
+  const retried = await json(await req('/agent-workflow-runs/' + failedRun.runId + '/retry', 'POST', {}));
+  assert.equal(retried.status, 'failed');
+  const reviewFlow = await json(await req('/agent-workflows', 'POST', { name: '人工审核流程', nodes: [{ key: 'analysis', agentId: 'a13' }, { key: 'review', type: 'approval' }] }, token2), 201);
+  const pending = await json(await req('/agent-workflows/' + reviewFlow.id + '/run', 'POST', { input: '审核商品' }, token2));
+  assert.equal(pending.status, 'pending_review');
+  assert.equal((await req('/agent-workflow-runs/' + pending.runId + '/review', 'POST', { action: 'approved' }, token2)).status, 403);
+  const queue = await json(await req('/agent-workflow-runs/pending-review'));
+  assert.ok(queue.runs.some(item => Number(item.id) === Number(pending.runId)));
+  const selfReviewFlow = await json(await req('/agent-workflows', 'POST', { name: '本人不可自审', nodes: [{ key: 'analysis', agentId: 'a1' }, { key: 'review', type: 'approval' }] }), 201);
+  const selfPending = await json(await req('/agent-workflows/' + selfReviewFlow.id + '/run', 'POST', { input: '自审检查' }));
+  assert.equal((await req('/agent-workflow-runs/' + selfPending.runId + '/review', 'POST', { action: 'approved' })).status, 403);
+  const pendingDetail = await json(await req('/agent-workflow-runs/' + pending.runId));
+  assert.equal(Number(pendingDetail.user_id), Number(otherId));
+  await runWithTenant(1, async () => {
+    await defaultAdapter.run('INSERT INTO ad_campaigns (tenant_id,shop_id,campaign_id,campaign_name,report_date,cost,impressions,clicks,cpc) VALUES (?,?,?,?,?,?,?,?,?)', [1, shopId, 'campaign-review-1', '阶段8候选推广计划', today, 100, 1000, 50, 2]);
+    await defaultAdapter.run('UPDATE agent_workflow_nodes SET result_json=? WHERE run_id=? AND node_key=? AND tenant_id=?', [JSON.stringify({ loss_campaigns: [{ campaign: '阶段8候选推广计划' }] }), pending.runId, 'analysis', 1]);
+  });
+  const approved = await json(await req('/agent-workflow-runs/' + pending.runId + '/review', 'POST', { action: 'approved', note: '已核验' }));
+  assert.equal(approved.status, 'success');
+  const createdExecutions = await json(await req('/agent-workflow-runs/' + pending.runId + '/execution-drafts', 'POST', {
+    actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '审核通过后暂停低效计划', nodeKey: 'analysis' }]
+  }), 201);
+  assert.equal(createdExecutions.executions.length, 1);
+  assert.equal(createdExecutions.executions[0].status, 'pending_manual');
+  assert.equal(Number(createdExecutions.executions[0].workflow_run_id), Number(pending.runId));
+  assert.ok(createdExecutions.batchId);
+  assert.equal((await req('/agent-workflow-runs/' + pending.runId + '/execution-drafts', 'POST', {
+    actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '重复提交' }]
+  })).status, 409);
+  assert.equal((await req('/agent-workflow-runs/' + pending.runId + '/execution-drafts', 'POST', {
+    actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-2', reason: '操作员不应创建执行任务' }]
+  }, token2)).status, 403);
+
+  const noApproval = await json(await req('/agent-workflows', 'POST', { name: '无审核不可执行', nodes: [{ key: 'analysis', agentId: 'a13' }] }, token2), 201);
+  const noApprovalRun = await json(await req('/agent-workflows/' + noApproval.id + '/run', 'POST', { input: '推广计划' }, token2));
+  assert.equal(noApprovalRun.status, 'success');
+  assert.equal((await req('/agent-workflow-runs/' + noApprovalRun.runId + '/execution-drafts', 'POST', {
+    actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '应拒绝无审核流程', nodeKey: 'analysis' }]
+  })).status, 400);
+
+  const taxFlow = await json(await req('/agent-workflows', 'POST', { name: '财税不生成推广动作', nodes: [{ key: 'tax', agentId: 'a18' }, { key: 'review', type: 'approval' }] }, token2), 201);
+  const taxPending = await json(await req('/agent-workflows/' + taxFlow.id + '/run', 'POST', { input: '税务数据' }, token2));
+  await json(await req('/agent-workflow-runs/' + taxPending.runId + '/review', 'POST', { action: 'approved' }));
+  assert.equal((await req('/agent-workflow-runs/' + taxPending.runId + '/execution-drafts', 'POST', {
+    actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '财税结果不得创建推广动作', nodeKey: 'tax' }]
+  })).status, 400);
+
+  const concurrentFlow = await json(await req('/agent-workflows', 'POST', { name: '并发幂等检查', nodes: [{ key: 'promotion', agentId: 'a13' }, { key: 'review', type: 'approval' }] }, token2), 201);
+  const concurrentRun = await json(await req('/agent-workflows/' + concurrentFlow.id + '/run', 'POST', { input: '并发计划检查' }, token2));
+  await runWithTenant(1, async () => {
+    await defaultAdapter.run('INSERT INTO ad_campaigns (tenant_id,shop_id,campaign_id,campaign_name,report_date,cost,impressions,clicks,cpc) VALUES (?,?,?,?,?,?,?,?,?)', [1, shopId, 'campaign-review-2', '第二个候选推广计划', today, 100, 1000, 50, 2]);
+    await defaultAdapter.run('UPDATE agent_workflow_nodes SET result_json=? WHERE run_id=? AND node_key=? AND tenant_id=?', [JSON.stringify({ loss_campaigns: [{ campaign: '阶段8候选推广计划' }, { campaign: '第二个候选推广计划' }] }), concurrentRun.runId, 'promotion', 1]);
+  });
+  await json(await req('/agent-workflow-runs/' + concurrentRun.runId + '/review', 'POST', { action: 'approved' }));
+  const invalidBatch = await req('/agent-workflow-runs/' + concurrentRun.runId + '/execution-drafts', 'POST', { actions: [
+    { shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '有效候选', nodeKey: 'promotion' },
+    { shopId, actionType: 'pause', campaignId: 'campaign-not-in-analysis', reason: '不在分析结果中', nodeKey: 'promotion' }
+  ] });
+  assert.equal(invalidBatch.status, 400);
+  const manualExecutor = require('../server/integrations/executors').get('manual');
+  const originalManualExecute = manualExecutor.execute;
+  manualExecutor.execute = async item => {
+    if (item.campaignId === 'campaign-review-2') throw new Error('测试注入执行器故障');
+    return originalManualExecute(item);
+  };
+  try {
+    const brokenBatch = await req('/agent-workflow-runs/' + concurrentRun.runId + '/execution-drafts', 'POST', { actions: [
+      { shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '事务回滚第一项', nodeKey: 'promotion' },
+      { shopId, actionType: 'pause', campaignId: 'campaign-review-2', reason: '事务回滚触发项', nodeKey: 'promotion' }
+    ] });
+    assert.equal(brokenBatch.status, 500);
+  } finally { manualExecutor.execute = originalManualExecute; }
+  await runWithTenant(1, async () => {
+    const batchRows = await defaultAdapter.get('SELECT COUNT(*) c FROM agent_workflow_execution_batches WHERE tenant_id=? AND workflow_run_id=?', [1, concurrentRun.runId]);
+    const executionRows = await defaultAdapter.get('SELECT COUNT(*) c FROM executions WHERE tenant_id=? AND workflow_run_id=?', [1, concurrentRun.runId]);
+    assert.equal(Number(batchRows.c), 0, '中途失败应回滚整个批次记录');
+    assert.equal(Number(executionRows.c), 0, '中途失败不能留下部分执行任务');
+  });
+  const duplicatePayload = { actions: [{ shopId, actionType: 'pause', campaignId: 'campaign-review-1', reason: '并发提交测试', nodeKey: 'promotion' }] };
+  const concurrentResponses = await Promise.all([
+    req('/agent-workflow-runs/' + concurrentRun.runId + '/execution-drafts', 'POST', duplicatePayload),
+    req('/agent-workflow-runs/' + concurrentRun.runId + '/execution-drafts', 'POST', duplicatePayload)
+  ]);
+  assert.deepEqual(concurrentResponses.map(r => r.status).sort(), [201, 409]);
+  await runWithTenant(1, async () => {
+    const batchRows = await defaultAdapter.get('SELECT COUNT(*) c FROM agent_workflow_execution_batches WHERE tenant_id=? AND workflow_run_id=?', [1, concurrentRun.runId]);
+    const executionRows = await defaultAdapter.get('SELECT COUNT(*) c FROM executions WHERE tenant_id=? AND workflow_run_id=?', [1, concurrentRun.runId]);
+    assert.equal(Number(batchRows.c), 1);
+    assert.equal(Number(executionRows.c), 1);
+  });
 });

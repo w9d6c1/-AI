@@ -332,6 +332,8 @@ CREATE TABLE IF NOT EXISTS executions (
   not_before TEXT,
   rollback_of INTEGER,
   reason TEXT,
+  workflow_run_id INTEGER,
+  workflow_node_key TEXT,
   started_at TEXT,
   finished_at TEXT,
   created_at TEXT DEFAULT to_char(now(),'YYYY-MM-DD HH24:MI:SS'),

@@ -557,7 +557,7 @@ const AGENT_PROMPTS = {
 }`,
     temperature: 0.3,
     maxTokens: 2000,
-    needsStoreData: false,
+    needsStoreData: true,
     outputFormat: 'json'
   },
 
@@ -622,7 +622,7 @@ const AGENT_PROMPTS = {
 }`,
     temperature: 0.2,
     maxTokens: 2000,
-    needsStoreData: false,
+    needsStoreData: true,
     outputFormat: 'json'
   }
 };

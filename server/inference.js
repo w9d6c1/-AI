@@ -25,6 +25,7 @@ async function buildContext(agentId, input, userId, options = {}) {
   } else {
     shopIds = (await repos.adapter.all('SELECT shop_id FROM user_shop_permissions WHERE user_id=? AND tenant_id=?', [userId, t])).map(r => r.shop_id);
   }
+  if (Array.isArray(options.shopIds)) shopIds = options.shopIds;
   if (!shopIds.length) return '\n\n（当前用户暂无可访问的店铺数据）';
 
   const placeholders = shopIds.map(() => '?').join(',');

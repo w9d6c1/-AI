@@ -14,7 +14,11 @@ const migrations = [
   require('./0010_stage9_billing'),
   require('./0011_stage9_quota_tokens'),
   require('./0012_stage9_invoicing'),
-  require('./0013_agent_workbench')
+  require('./0013_agent_workbench'),
+  require('./0014_agent_workflows'),
+  require('./0015_agent_workflow_reviews'),
+  require('./0016_agent_workflow_executions'),
+  require('./0017_agent_workflow_execution_batches')
 ];
 
 async function runMigrations(db) {

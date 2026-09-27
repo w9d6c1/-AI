@@ -81,6 +81,56 @@ function fallback(id, input, o = {}) {
     base.health_score = null;
     base.issues = ['曝光', '点击', '转化', '售后'].map(dimension => ({ dimension, issue: '待数据诊断', evidence: '本地框架未判断该指标是否异常', severity: '待确认', action: { 曝光: '核对曝光量与流量来源', 点击: '核对展现、点击与主图版本', 转化: '核对访客、支付买家与价格', 售后: '核对退款数量、原因及评价' }[dimension], validation: '补充同周期实际数据后复核' }));
     base.missing_data = ['商品粒度的经营漏斗数据及对比基准'];
+  } else if (id === 'a5') {
+    const rows = String(o.questions || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+    const groups = ['产品功能', '价格与性价比', '使用场景', '售后服务', '对比选择'];
+    base.question_categories = groups.map((category, i) => ({ category, count: rows.length ? Math.ceil(rows.length / groups.length) : 0, percentage: rows.length ? Math.round(100 / groups.length) : 0, evidence: rows.slice(i, i + 2) }));
+    base.top_concerns = rows.slice(0, 5);
+    base.detail_page_suggestions = rows.slice(0, 5).map(question => ({ question, content_suggestion: '在详情页补充基于真实参数和服务政策的明确回答', placement: '功能 / 售后说明区域' }));
+    if (!rows.length) base.missing_data.push('问大家原文');
+  } else if (id === 'a10') {
+    const themes = ['核心卖点', '用户痛点', '使用场景', '细节与参数', '信任依据', '对比优势', '行动提示'];
+    base.logic_flow = '从真实需求切入，依次说明商品特点、使用方式、可信依据和购买前需确认的信息。';
+    base.screens = themes.slice(0, count).map((theme, i) => ({ screen: i + 1, theme, content: points[i] || '待补充真实内容', visual_direction: o.visualStyle || '清晰、克制、突出商品主体', key_message: `第${i + 1}屏重点说明${theme}` }));
+    if (!points.length) base.missing_data.push('商品核心卖点');
+  } else if (id === 'a11') {
+    base.style = o.style || '专业可信';
+    base.sections = Array.from({ length: count }, (_, i) => ({ screen: i + 1, title: `${input} · 第${i + 1}屏`, body: clip(`围绕${points[i] || '已确认商品特点'}说明使用场景和选择依据；参数、资质、优惠请以真实资料为准。`, o.maxLength || 200), cta: '查看真实参数与服务说明' }));
+    if (!points.length) base.missing_data.push('商品卖点与参数');
+  } else if (id === 'a12') {
+    base.buyer_personas = Array.from({ length: count }, (_, i) => ({ name: `创意用户画像${i + 1}`, profile: o.persona || '待由真实用户资料确认', scene, review_text: `这是围绕${input}的买家秀创意文案，不代表真实用户评价。`, image_prompt_en: `authentic product lifestyle photo of ${input}, ${scene}, no invented claims, no fake testimonial text` }));
+    base.warnings.push('买家秀内容必须取得真实用户授权并人工审核，不得冒充真实评价。');
+  } else if (id === 'a13') {
+    base.channel_analysis = [{ channel: '待识别渠道', cost: null, roi: null, status: '待数据', issue: '请提供推广明细或授权店铺广告数据' }];
+    base.loss_campaigns = []; base.efficient_campaigns = []; base.budget_reallocation = [];
+    base.missing_data.push('推广计划、花费、成交额和 ROI');
+    base.requires_review = true;
+  } else if (id === 'a14') {
+    base.campaign_status = [{ campaign: '待识别计划', stage: '待数据', roi: null, cost: null, status: '待核验' }];
+    base.adjustments = []; base.crowd_strategy = [];
+    base.missing_data.push('万相台计划、人群和预算数据');
+    base.requires_review = true;
+  } else if (id === 'a15') {
+    base.channel_breakdown = ['自然搜索', '推荐', '付费', '内容', '私域'].map(channel => ({ channel, visitors: null, percentage: null, conversion_rate: null, health: '待数据' }));
+    base.imbalance_issues = ['缺少渠道明细，暂不能判断流量结构是否健康']; base.optimization = [];
+    base.missing_data.push('分渠道访客、订单和成交数据');
+  } else if (id === 'a16') {
+    base.regional_analysis = []; base.high_value_regions = []; base.low_efficiency_regions = []; base.adjustments = [];
+    base.missing_data.push('地域访客、订单、成交额、花费和 ROI');
+    base.requires_review = true;
+  } else if (id === 'a18') {
+    base.risk_assessment = { level: '待专业复核', score: null };
+    base.risks = [{ type: '数据完整性', description: '当前仅能基于已提供材料检查，不能替代税务专业判断', level: '待确认', regulation: '需核对适用政策版本', action: '补充主体、交易、发票、退款和申报资料后复核' }];
+    base.compliance_suggestions = [{ item: '资料留存', current_status: '待确认', suggestion: '建立交易、发票、退款和申报资料的关联留痕', priority: '高' }];
+    base.missing_data.push('主体类型、发票、退款和申报信息');
+    base.warnings.push('财税结果仅供风险排查，必须由税务专业人员结合最新政策复核。');
+  } else if (id === 'a19') {
+    base.data_source = 'framework';
+    base.base = { category: '待补充', shop: '待补充', monthlySales: '需数据源', price: '待补充', rating: '待补充' };
+    base.dimensions = ['搜索排名', '主图吸引力', '评价质量', '价格竞争力', '销量趋势', '促销力度'].map(label => ({ label, value: '需数据源', score: null }));
+    base.radar = { competitor: [0, 0, 0, 0, 0, 0], self: [0, 0, 0, 0, 0, 0] };
+    base.missing_data.push('竞品公开数据与自有店铺对比数据');
+    base.suggestions = ['接入可核验竞品数据后重新运行；当前结果仅为比较框架。'];
   } else {
     base.opportunities = words.map(keyword => ({ keyword, evidence: '用户输入的待研究方向', competition: null, opportunity_score: null, audience: o.audience || '待验证', price_range: o.priceRange || '待验证', action: '补充搜索趋势、商品数与价格分布后评估', risk: '目前不能判断是否为蓝海' }));
     base.missing_data = ['真实搜索量及增长率', '竞争商品数与成交分布'];

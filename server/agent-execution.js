@@ -6,7 +6,7 @@ const { getAgentCatalog } = require('./agent-prompts');
 const { validateRequest } = require('./agent-workbench');
 const { imageGen, imageEnabled, sizeForRatio, localUploadToDataUri } = require('./ai');
 const { ownedFile, registerFile, signFile } = require('./files');
-const { httpError } = require('./access');
+const { httpError, resolveShopIds } = require('./access');
 
 // 同租户串行检查与执行，避免新工作台并发请求重复消耗剩余额度。
 const running = new Set();
@@ -14,6 +14,13 @@ async function executeAgent(user, id, body) {
   const tenant = requireTenant();
   if (!getAgentCatalog()[id]) throw httpError(404, '智能体不存在');
   const request = validateRequest(id, body);
+  if (request.options.parentRunId) {
+    const parent = await repos.adapter.get('SELECT id FROM agent_runs WHERE id=? AND user_id=? AND tenant_id=?', [request.options.parentRunId, user.id, tenant]);
+    if (!parent) throw httpError(404, '来源运行记录不存在或无权访问');
+  }
+  if (Object.prototype.hasOwnProperty.call(request.options, 'shopIds')) {
+    request.options.shopIds = await resolveShopIds(user, request.options.shopIds);
+  }
   let refImage;
   if (request.options.referenceImage) {
     const url = await ownedFile(user, request.options.referenceImage);

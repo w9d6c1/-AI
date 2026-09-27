@@ -3,8 +3,8 @@ const assert = require('node:assert/strict');
 const { definitions, getWorkbench, validateRequest, normalizeResult } = require('../server/agent-workbench');
 const { fallback } = require('../server/agent-fallbacks');
 
-test('工作台契约：核心 9 个智能体均有专属输入和输出', () => {
-  const ids = ['a1', 'a2', 'a3', 'a4', 'a6', 'a7', 'a8', 'a9', 'a17'];
+test('工作台契约：全部 19 个智能体均有专属输入和输出', () => {
+  const ids = Array.from({ length: 19 }, (_, i) => `a${i + 1}`);
   for (const id of ids) {
     const c = getWorkbench(id);
     assert.ok(c, id);
@@ -14,6 +14,11 @@ test('工作台契约：核心 9 个智能体均有专属输入和输出', () =>
   }
   assert.equal(getWorkbench('a17').type, 'copy');
   assert.equal(getWorkbench('a9').type, 'image');
+  assert.equal(getWorkbench('a18').type, 'diagnosis');
+  assert.equal(getWorkbench('a19').resultKey, 'dimensions');
+  assert.deepEqual(getWorkbench('a13').dataSources, ['manual', 'file', 'store']);
+  assert.equal(getWorkbench('a13').requiresReview, true);
+  assert.equal(getWorkbench('a17').supportsRevision, true);
 });
 
 test('工作台参数校验：拒绝空输入、错误枚举和过长内容', () => {
@@ -23,6 +28,15 @@ test('工作台参数校验：拒绝空输入、错误枚举和过长内容', ()
   assert.throws(() => validateRequest('a17', { input: '商品', extra: 'x'.repeat(12001) }), /补充说明不能超过/);
   const request = validateRequest('a17', { input: '商品', extra: '真实要求', options: { contentType: '商品卖点', count: 2 } });
   assert.equal(request.options.count, 2);
+  assert.equal(validateRequest('a17', { input: '商品', options: { parentRunId: '12' } }).options.parentRunId, 12);
+  assert.throws(() => validateRequest('a17', { input: '商品', options: { parentRunId: 0 } }), /来源运行记录不正确/);
+});
+
+test('工作台参数校验：店铺多选只接受正整数数组', () => {
+  const request = validateRequest('a13', { input: '推广计划', options: { shopIds: [3, '3', 7] } });
+  assert.deepEqual(request.options.shopIds, [3, 7]);
+  assert.throws(() => validateRequest('a13', { input: '推广计划', options: { shopIds: ['x'] } }), /店铺.*格式不正确/);
+  assert.throws(() => validateRequest('a13', { input: '推广计划', options: { shopIds: 'not-json' } }), /店铺.*格式不正确/);
 });
 
 test('离线模板：文案和标题遵守数量、长度并保留数据边界', () => {
