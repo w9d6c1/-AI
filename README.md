@@ -136,68 +136,58 @@ ecom-ai-platform/
 
 ---
 
-## 云端部署：GitHub Pages（前端） + Render（后端）
+## 云端部署：Zeabur 同源部署（前端 + 后端单服务）
 
-架构说明：前端为纯静态 SPA（`public/`），由 GitHub Pages 托管在 `https://w9d6c1.github.io/-AI/`；后端 Express API 由 Render 托管；两端跨域通信（JWT Bearer 鉴权）。
+架构说明：前端为纯静态 SPA（`public/`），与 Express API 由**同一个 Zeabur 服务**同源托管——后端直接提供 `/`（静态前端）、`/api/**`（接口）与 `/uploads/**`（上传文件）。同源部署**无需 CORS**，`public/js/config.js` 的 `__API_BASE__` 保持空串即可。
 
-### 部署前准备
+数据库使用内置 SQLite（`DB_DRIVER=sqlite`，默认），数据文件、上传文件、报表与日志统一持久化在挂载到 `/data` 的 Zeabur Volume 中。
 
-1. 仓库 `w9d6c1/-AI` 已推送到 GitHub 的 `main` 分支。
-2. 后端 `JWT_SECRET` / `RPA_CALLBACK_TOKEN` 等密钥只在平台后台填写，**严禁提交到仓库**（`.env` 已 gitignore）。
+### 第一步：Zeabur 部署后端（含前端）
 
-### 第一步：Render 部署后端
+1. 登录 [Zeabur](https://zeabur.com)，新建 Project。
+2. **Add Service → Git**，授权 GitHub 并选择仓库 `w9d6c1/-AI`、分支 `main`。Zeabur 自动识别根目录 `Dockerfile` 构建（无需额外配置）。
+3. 在服务 **Environment Variables** 按下方清单填写环境变量（`JWT_SECRET` / `RPA_CALLBACK_TOKEN` 请用随机值）。
+4. 在 **Volumes** 标签点击 **Mount Volume**：Volume ID 填 `data`，Mount Directory 填 `/data`。
+   > 挂载会清空该目录原有内容（全新库无影响）；挂载后服务不再支持零停机重启。
+5. 在 **Networking / Public Networking** 生成公开域名，得到 `https://<名称>.zeabur.app`。
+6. 触发部署，在日志确认服务启动成功。
 
-1. 登录 [Render](https://render.com)，新建 **Blueprint**，关联 `w9d6c1/-AI` 仓库。
-2. 自动识别根目录 `render.yaml`，创建两个资源：
-   - Web 服务 `ecom-ai-backend`（Docker 运行时，`buildCommand: npm ci`，启动 `node server/index.js`，健康检查 `/api/health`）
-   - 托管 PostgreSQL `ecom-ai-db`
-3. 环境变量已由 `render.yaml` 预置（`JWT_SECRET` / `RPA_CALLBACK_TOKEN` 由 Render 自动生成随机值；`DATABASE_URL` 自动注入）。
-4. **首次建管理员账号**：在 Web 服务 Environment 里临时加 `SEED_DEFAULT_USERS=true` 与至少 12 位 `ADMIN_PASSWORD`，点 "Manual Deploy" 触发一次部署；看到日志创建完成后，改回 `SEED_DEFAULT_USERS=false` 再部署一次。
-5. 确认 `CORS_ORIGIN` = `https://w9d6c1.github.io`（`render.yaml` 已预置）。
-6. 记下后端的公网地址：`https://ecom-ai-backend.onrender.com`（在 Web 服务页顶部可见）。
+### 第二步：首次创建管理员
 
-### 第二步：GitHub Pages 部署前端
+仅空数据库执行一次：临时添加 `SEED_DEFAULT_USERS=true` 和至少 12 位 `ADMIN_PASSWORD`，重新部署；日志出现 `[seed] 已创建管理员` 后，**删除这两个变量并再次部署**（逻辑幂等，已有用户时自动跳过）。
 
-1. 仓库 → **Settings → Pages**，`Source` 选择 **GitHub Actions**。
-2. 仓库 → **Settings → Secrets and variables → Actions**，新建仓库 Secret：
-   - 名称：`BACKEND_API_URL`
-   - 值：`https://ecom-ai-backend.onrender.com`（第一步记下的后端地址，**末尾不要带斜杠**）
-3. 推送代码到 `main` 分支，`.github/workflows/deploy.yml` 自动运行：读取 `BACKEND_API_URL` → 生成 `public/js/config.js`（写入 `window.__API_BASE__`）→ 发布到 Pages。
-4. 访问 `https://w9d6c1.github.io/-AI/` 验证登录与数据。
+### 第三步：验证
+
+- `GET https://<域名>/api/health` 返回 `{"ok":true}`。
+- `GET https://<域名>/api/health/ready` 返回 200，且 `checks.db.ok=true`、`checks.storage.ok=true`。
+- 浏览器打开 `https://<域名>/`，使用管理员账号登录。
 
 ### 环境变量清单
-
-**后端（Render，可在 Web 服务 Environment 中查看/覆盖）**
 
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `NODE_ENV` | 是 | 固定 `production` |
-| `DB_DRIVER` | 是 | 固定 `postgres` |
-| `DATABASE_URL` | 是 | 由托管 Postgres 自动注入 |
-| `JWT_SECRET` | 是 | 登录密钥，Render 自动生成 |
-| `RPA_CALLBACK_TOKEN` | 是 | RPA 回调验证，Render 自动生成 |
-| `CORS_ORIGIN` | 是 | 前端域名 `https://w9d6c1.github.io` |
-| `TRUST_PROXY` | 是 | `1`（Render 前置代理） |
+| `TZ` | 建议 | `Asia/Shanghai` |
+| `DB_DRIVER` | 是 | `sqlite`（默认，无需独立数据库服务） |
+| `DATA_DIR` | 是 | `/data`（挂载 Volume 的目录） |
+| `UPLOAD_DIR` | 是 | `/data/uploads` |
+| `JWT_SECRET` | 是 | 至少 32 位随机串 |
+| `RPA_CALLBACK_TOKEN` | 是 | 随机串 |
+| `REDIS_REQUIRED` | 建议 | `false`（无 Redis，走内存降级） |
+| `QUEUE_ENABLED` | 建议 | `false`（单实例） |
+| `ENABLE_SCHEDULER` | 建议 | `false`（关闭定时采集；需要时再评估队列依赖） |
+| `STORAGE_DRIVER` | 建议 | `local`（文件存于 `/data/uploads`，已持久化） |
+| `RPA_MOCK_MODE` | 建议 | `true` |
+| `TRUST_PROXY` | 是 | `1`（平台前置代理） |
 | `ENABLE_HSTS` | 建议 | `true` |
-| `REDIS_REQUIRED` | 建议 | `false`（免费实例无 Redis，走内存降级） |
-| `ENABLE_SCHEDULER` | 建议 | `false`（单实例） |
-| `QUEUE_ENABLED` | 建议 | `false` |
-| `STORAGE_DRIVER` | 建议 | `local`（临时卷，重启丢上传文件） |
+| `ALLOW_REGISTRATION` | 建议 | `false` |
 | `AI_API_KEY` | 否 | 大模型 Key，不配则降级内置规则引擎 |
-| `SEED_DEFAULT_USERS` / `ADMIN_PASSWORD` | 仅首启 | 建管理员账号，用完关闭 |
-
-**前端（GitHub Actions Secret）**
-
-| Secret | 说明 |
-|---|---|
-| `BACKEND_API_URL` | 后端公网地址，如 `https://ecom-ai-backend.onrender.com` |
+| `SEED_DEFAULT_USERS` / `ADMIN_PASSWORD` | 仅首启 | 建管理员账号，用完删除 |
 
 ### 重点提示
 
-- **CORS**：`CORS_ORIGIN` 必须精确等于 `https://w9d6c1.github.io`（无路径、无尾斜杠）。改域名时两端要同步改。
-- **Render 免费实例休眠**：15 分钟无请求会休眠，冷启动约 30~60 秒（首次访问慢属正常）。可外部定时（如 cron / UptimeRobot）每隔几分钟 ping `https://ecom-ai-backend.onrender.com/api/health` 缓解。
-- **密钥严禁上传 GitHub**：`JWT_SECRET`、`AI_API_KEY`、`RPA_APP_SECRET` 等只在 Render 后台填写；`BACKEND_API_URL` 是公开地址可用 Secret（但不是机密）。`.env` 已在 `.gitignore`，请勿手动 `git add .env`。
-- **数据持久化**：PostgreSQL 数据持久化在托管数据库；但 `STORAGE_DRIVER=local` 的上传文件存于 Render 临时卷，重启/重部署会丢失。生产建议接 S3 兼容对象存储（`STORAGE_DRIVER=s3` + `S3_*`）。
-- **免费 Postgres 30 天过期**：Render 免费 Postgres 数据库**创建 30 天后会被删除**。到期前需升级付费或迁移到新库，否则数据丢失（重新部署会自动重建 Schema，但需再次临时开启 `SEED_DEFAULT_USERS` 建管理员）。
-- **数据库连接报错排查**：免费实例内部连接默认不需要 SSL，一般直接可用；若日志出现 SSL / 握手错误，在 `DATABASE_URL` 末尾追加 `?sslmode=require` 即可（内部连接不支持 `verify-full`）。
-- **首次部署无管理员**：空库首启不会创建账号（`ALLOW_REGISTRATION` 默认关闭）。需在 Render 后台临时加 `SEED_DEFAULT_USERS=true` + 至少 12 位 `ADMIN_PASSWORD`，部署建号后再改回 `false`（该逻辑幂等，已有用户时自动跳过）。
+- **同源无需 CORS**：前端与 API 同域，未设置 `CORS_ORIGIN` 即可；若日后拆分前端，再按需设置。
+- **免费版休眠**：Zeabur 免费计划在闲置后自动休眠，下次请求冷启动数秒（首次访问慢属正常）；需要常驻可升级 Dev Plan。
+- **持久化**：SQLite 库、上传文件、报表、日志都位于 `/data`，务必挂载 Volume，否则重启丢失。
+- **密钥严禁上传 GitHub**：`JWT_SECRET`、`AI_API_KEY` 等只在 Zeabur 后台填写（`.env` 已 gitignore，勿手动 `git add .env`）。
+- **首次部署无管理员**：空库首启不创建账号（`ALLOW_REGISTRATION` 默认关闭），按「第二步」临时开启 `SEED_DEFAULT_USERS` 建号。
