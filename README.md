@@ -136,7 +136,9 @@ ecom-ai-platform/
 
 ---
 
-## 云端部署：Zeabur 同源部署（前端 + 后端单服务）
+## 云端部署（可选）：Zeabur 同源部署（前端 + 后端单服务）
+
+> ⚠️ Zeabur 的共享集群已于 2026-04 停用：**新项目必须有服务器**（向 Zeabur 购买，或接入自有服务器 BYOS），免费计划不含算力。**免费场景请用下方「本机免费公网访问（Cloudflare Tunnel）」。**
 
 架构说明：前端为纯静态 SPA（`public/`），与 Express API 由**同一个 Zeabur 服务**同源托管——后端直接提供 `/`（静态前端）、`/api/**`（接口）与 `/uploads/**`（上传文件）。同源部署**无需 CORS**，`public/js/config.js` 的 `__API_BASE__` 保持空串即可。
 
@@ -191,3 +193,44 @@ ecom-ai-platform/
 - **持久化**：SQLite 库、上传文件、报表、日志都位于 `/data`，务必挂载 Volume，否则重启丢失。
 - **密钥严禁上传 GitHub**：`JWT_SECRET`、`AI_API_KEY` 等只在 Zeabur 后台填写（`.env` 已 gitignore，勿手动 `git add .env`）。
 - **首次部署无管理员**：空库首启不创建账号（`ALLOW_REGISTRATION` 默认关闭），按「第二步」临时开启 `SEED_DEFAULT_USERS` 建号。
+
+---
+
+## 本机免费公网访问（Cloudflare Tunnel）
+
+适用于「没有云服务器、用自己电脑 + 免费公网链接」的场景：应用在本机运行，通过 Cloudflare 快速隧道暴露成临时 `https://*.trycloudflare.com` 地址（前端与 API 同源，天然跨域无忧）。
+
+> 限制：链接仅在**本机开机且启动脚本运行中**有效；快速隧道每次启动的网址会变化，启动后写入 `.runtime/public-url.txt`。
+
+### 一键启动
+
+```powershell
+# 双击也行：deploy\windows\start-public.cmd
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\windows\start-public.ps1
+```
+
+脚本依次完成：确保 cloudflared 可用（缺失自动下载到 `%LOCALAPPDATA%\cloudflared`）→ 启动 `node server/index.js` → 开启隧道 → 打印公网地址。
+
+停止：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\windows\stop-public.ps1
+```
+
+### 登录后自动启动（可选，无需管理员）
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File deploy\windows\install-autostart.ps1
+# 取消自启：加 -Uninstall
+```
+
+自启后无窗口，公网地址见 `.runtime/public-url.txt`。
+
+### 可选：固定网址
+
+快速隧道网址每次变化。若需固定网址：注册免费 Cloudflare 账号并准备一个域名，改用**命名隧道**（`cloudflared tunnel create` + DNS 路由）；或使用 Tailscale Funnel（免费，固定 `*.ts.net`）。
+
+### 安全提示
+
+- 公网可直达登录页，请使用强 `ADMIN_PASSWORD`；隧道地址属「随机即隐藏」，不宜长期公开。
+- 首次使用需临时 `SEED_DEFAULT_USERS=true` 建管理员，建好后改回 `false`（逻辑幂等）。

@@ -38,6 +38,7 @@ npm-debug.log*
 # Tooling artifacts
 .playwright-mcp/
 _dev-archive/
+.runtime/
 
 # Build output
 dist/

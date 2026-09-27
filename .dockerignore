@@ -9,3 +9,4 @@
 !scripts/**
 !deploy/
 !deploy/**
+deploy/windows/
